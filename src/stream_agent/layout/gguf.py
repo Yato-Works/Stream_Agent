@@ -230,6 +230,52 @@ async def build_gguf_layout(
     layout.shards[path] = _gguf_shard(path, size, metadata)
     for tensor in metadata.tensors:
         layout.tensor_shard[tensor.name] = path
+    # Populate per-tensor byte ranges (Level 2 foundation).
+    from .safetensors import TensorRef
+    _BLOCK_ELEMS = {
+        # quantized types use 32 or 256 element blocks
+    }
+    for t in metadata.tensors:
+        numel = t.element_count
+        ggtype = t.ggml_type
+        # block size in bytes from GGML_TYPE_SIZES (may be per 32/256)
+        block_bytes = GGML_TYPE_SIZES.get(ggtype, 0)
+        if ggtype in (10, 11, 12, 13, 14, 15):
+            block_elems = 256
+        elif ggtype in (0, 1, 22, 23, 24, 25, 26, 28):
+            block_elems = 1
+        else:
+            block_elems = 32
+        if block_elems == 1:
+            nbytes = numel * block_bytes
+        else:
+            nbytes = (numel // block_elems) * block_bytes
+            if numel % block_elems:
+                nbytes += block_bytes
+        start = metadata.data_offset + t.offset
+        end = start + nbytes
+        if end > size:
+            end = size
+        dtype_label = {0:"F32",1:"F16",26:"F64",28:"BF16",22:"I8",23:"I16",24:"I32",25:"I64"}.get(ggtype, "U8")
+        layout.tensors[t.name] = TensorRef(
+            name=t.name,
+            dtype=dtype_label,
+            shape=tuple(reversed(t.dims)) if t.dims else (),
+            shard=path,
+            data_start=start,
+            data_end=end,
+            file_size=size,
+        )
+    # Register small metadata files so the backend can fetch config/tokenizer.
+    METADATA_FILES = (
+        "config.json", "generation_config.json", "tokenizer.json",
+        "tokenizer_config.json", "special_tokens_map.json", "vocab.json",
+        "merges.txt", "chat_template.jinja",
+    )
+    for name in METADATA_FILES:
+        info = revision.files.get(name)
+        if info is not None and getattr(info, "size", None):
+            layout.metadata_files[name] = info.size
     return layout
 
 

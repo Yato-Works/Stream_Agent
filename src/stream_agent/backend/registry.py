@@ -42,6 +42,12 @@ def register_builtin_backends() -> None:
         register_backend("transformers", TransformersBackend)
     except Exception:  # pragma: no cover - torch/transformers are optional
         pass
+    try:
+        from .gguf_backend import GgufBackend
+
+        register_backend("gguf", GgufBackend)
+    except Exception:  # pragma: no cover
+        pass
 
 
 __all__ = [
