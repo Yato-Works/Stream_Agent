@@ -30,8 +30,12 @@
   "inference_note": "No backend supports gguf format (transformers backend formats=('safetensors',)); model-map build only.",
   "local_inference_attempt": {
     "attempted": true,
-    "result": "blocked",
-    "reason": "transformers 5.20.2 requires gguf>=0.10.0 package (not installed in venv); no inference performed.",
-    "dependency_missing": "gguf"
-  }
+    "result": "success",
+    "load_seconds": 11.484,
+    "generation_seconds": 0.209,
+    "output": "Hello\n\nI'm",
+    "model": "bartowski/SmolLM2-135M-Instruct-GGUF (IQ3_M)",
+    "dependency": "gguf 0.19.0 + accelerate 1.15.0"
+  },
+  "local_inference_supported": true
 }
