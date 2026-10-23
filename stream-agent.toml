@@ -1,0 +1,51 @@
+# Example Stream Agent configuration (see Plan.md section 13.2).
+#
+# The two limits below mean different things:
+#   weight_cache_limit_gib    hard cap for retained weight payload blocks
+#   managed_store_limit_gib   hard cap for the whole managed directory
+#                             (payload + metadata + logs + temporary files)
+# The payload budget must stay below the store cap so that metadata and
+# in-flight downloads have room.
+
+[server]
+host = "127.0.0.1"
+port = 8789
+max_concurrent_requests = 1
+request_timeout_seconds = 3600
+allow_remote_bind = false
+
+[storage]
+root = "~/.stream-agent"
+weight_cache_limit_gib = 18
+managed_store_limit_gib = 20
+metadata_reserve_mib = 256
+staging_reserve_mib = 768
+quota_policy = "fixed"      # fixed | elastic
+eviction_policy = "lru"
+verify_before_use = true
+block_size_bytes = 8388608
+
+[source.huggingface]
+enabled = true
+# The token is read from this environment variable or a local credential
+# store. It is never written to this file, to a report or to a log.
+token_env = "HF_TOKEN"
+max_parallel_ranges = 4
+request_timeout_seconds = 120
+retry_limit = 4
+
+# Register a model with:
+#   stream-agent model add Qwen/Qwen3.8-27B --alias qwen38 --revision <sha>
+#
+# The revision must be a real commit sha; placeholder values are rejected.
+# Registering a model never downloads weight bytes.
+
+# [models.qwen38]
+# repo = "Qwen/Qwen3.8-27B"
+# revision = "<PINNED_COMMIT_SHA>"
+# format = "safetensors"
+# backend = "transformers"
+# weight_cache_quota_gib = 3
+# quota_mode = "fixed"
+# license_review = "pending"
+# allow_remote_code = false

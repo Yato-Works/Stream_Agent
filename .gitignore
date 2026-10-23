@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Tooling
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Stream Agent managed store (never commit cached weights or metadata)
+.stream-agent/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm

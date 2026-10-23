@@ -1,0 +1,158 @@
+"""Source adapter tests: range validation and error mapping (Plan.md C2 / 8.2)."""
+
+from __future__ import annotations
+
+import httpx
+import pytest
+
+from stream_agent.config import SourceConfig
+from stream_agent.errors import (
+    ErrorCode,
+    RangeMismatchError,
+    RangeUnsupportedError,
+    SourceAuthError,
+    SourceForbiddenError,
+    SourceNotFoundError,
+    SourceRateLimitedError,
+    SourceUnavailableError,
+)
+from stream_agent.sources.hf_hub import HuggingFaceSource
+
+
+def _client(handler) -> httpx.AsyncClient:
+    return httpx.AsyncClient(
+        transport=httpx.MockTransport(handler),
+        follow_redirects=True,
+        base_url="https://huggingface.co",
+    )
+
+
+async def test_range_request_requires_206():
+    async def handler(request: httpx.Request) -> httpx.Response:
+        # A source that ignores the Range header answers with the full object.
+        return httpx.Response(200, content=b"x" * 4096)
+
+    source = HuggingFaceSource(SourceConfig(), client=_client(handler))
+    with pytest.raises(RangeUnsupportedError) as excinfo:
+        await source.fetch_range("a/b", "commit", "model.safetensors", 0, 10)
+    assert excinfo.value.code == ErrorCode.RANGE_UNSUPPORTED
+
+
+async def test_wrong_content_range_is_rejected():
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            206,
+            content=b"y" * 11,
+            headers={"Content-Range": "bytes 100-110/1000"},
+        )
+
+    source = HuggingFaceSource(SourceConfig(), client=_client(handler))
+    with pytest.raises(RangeMismatchError):
+        await source.fetch_range("a/b", "commit", "model.safetensors", 0, 10)
+
+
+async def test_short_body_is_rejected():
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            206, content=b"y" * 5, headers={"Content-Range": "bytes 0-10/1000"}
+        )
+
+    source = HuggingFaceSource(SourceConfig(), client=_client(handler))
+    with pytest.raises(RangeMismatchError):
+        await source.fetch_range("a/b", "commit", "model.safetensors", 0, 10)
+
+
+@pytest.mark.parametrize(
+    "status,expected",
+    [
+        (401, SourceAuthError),
+        (403, SourceForbiddenError),
+        (404, SourceNotFoundError),
+        (429, SourceRateLimitedError),
+        (503, SourceUnavailableError),
+    ],
+)
+async def test_status_codes_map_to_typed_errors(status, expected):
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(status, content=b"nope")
+
+    source = HuggingFaceSource(SourceConfig(retry_limit=0), client=_client(handler))
+    with pytest.raises(expected):
+        await source.fetch_range("a/b", "commit", "model.safetensors", 0, 10)
+
+
+async def test_successful_range_read():
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert request.headers["Range"] == "bytes=10-19"
+        return httpx.Response(
+            206, content=b"0123456789", headers={"Content-Range": "bytes 10-19/100"}
+        )
+
+    source = HuggingFaceSource(SourceConfig(), client=_client(handler))
+    data = await source.fetch_range("a/b", "commit", "model.safetensors", 10, 19)
+    assert data == b"0123456789"
+
+
+async def test_probe_reports_unsupported_sources():
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b"x" * 100)
+
+    source = HuggingFaceSource(SourceConfig(), client=_client(handler))
+    support = await source.probe_range_support("a/b", "commit", "model.safetensors")
+    assert support.supported is False
+    assert "Range" in support.reason
+
+
+async def test_token_is_sent_when_configured(monkeypatch):
+    monkeypatch.setenv("HF_TOKEN", "secret-token")
+    seen: dict[str, str] = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen["auth"] = request.headers.get("authorization", "")
+        return httpx.Response(
+            206, content=b"0" * 4, headers={"Content-Range": "bytes 0-3/100"}
+        )
+
+    source = HuggingFaceSource(SourceConfig(token_env="HF_TOKEN"), client=_client(handler))
+    await source.fetch_range("a/b", "commit", "model.safetensors", 0, 3)
+    assert seen["auth"] == "Bearer secret-token"
+
+
+async def test_connection_reset_is_retried_and_then_reported():
+    attempts = {"count": 0}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        attempts["count"] += 1
+        raise httpx.ConnectError("connection reset", request=request)
+
+    source = HuggingFaceSource(SourceConfig(retry_limit=1), client=_client(handler))
+    with pytest.raises(SourceUnavailableError):
+        await source.fetch_range("a/b", "commit", "model.safetensors", 0, 10)
+    assert attempts["count"] == 2  # one attempt plus one retry
+
+
+async def test_expired_signed_url_is_reported_as_forbidden():
+    async def handler(request: httpx.Request) -> httpx.Response:
+        # A signed URL that expired between the probe and the transfer.
+        return httpx.Response(403, content=b"expired")
+
+    source = HuggingFaceSource(SourceConfig(retry_limit=0), client=_client(handler))
+    with pytest.raises(SourceForbiddenError):
+        await source.fetch_range("a/b", "commit", "model.safetensors", 0, 10)
+
+
+async def test_a_transient_server_error_is_retried():
+    calls = {"count": 0}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        calls["count"] += 1
+        if calls["count"] == 1:
+            return httpx.Response(503, content=b"later")
+        return httpx.Response(
+            206, content=b"0" * 11, headers={"Content-Range": "bytes 0-10/100"}
+        )
+
+    source = HuggingFaceSource(SourceConfig(retry_limit=2), client=_client(handler))
+    data = await source.fetch_range("a/b", "commit", "model.safetensors", 0, 10)
+    assert data == b"0" * 11
+    assert calls["count"] == 2

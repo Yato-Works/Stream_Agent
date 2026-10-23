@@ -1,0 +1,653 @@
+{
+  "schema_version": "0.1",
+  "results": [
+    {
+      "model": "tiny",
+      "cache_budget_bytes": 524288,
+      "cold_or_warm": "cold",
+      "summary": {
+        "runs": 3,
+        "downloaded_bytes_total": 16221063,
+        "bytes_per_output_token": 168969.4067,
+        "cache_hit_ratio": 0.968,
+        "weight_wait_fraction": 0.9203,
+        "ttft_ms": 2507.7185,
+        "tokens_per_second": 12.7691,
+        "generated_tokens": 96,
+        "evictions": 55
+      },
+      "runs": [
+        {
+          "schema_version": "0.1",
+          "run_id": "bench-1792599147419-0",
+          "model": {
+            "repo": "hf-internal-testing/tiny-random-LlamaForCausalLM",
+            "revision": "9fb191250dd56d0ba7ec9785a025ed29c03d5998",
+            "artifact_format": "safetensors",
+            "quantization": null,
+            "backend_id": "transformers",
+            "backend_version": "0.1.0"
+          },
+          "budget": {
+            "weight_cache_limit_bytes": 524288,
+            "managed_store_limit_bytes": 21474836480,
+            "peak_weight_cache_bytes": 786432,
+            "peak_managed_store_bytes": 6517551
+          },
+          "network": {
+            "downloaded_bytes_total": 6637735,
+            "downloaded_bytes_failed": 0,
+            "range_requests": 24,
+            "full_object_requests": 0,
+            "retries": 0,
+            "source_errors": 0,
+            "profile": null
+          },
+          "cache": {
+            "hits": 575,
+            "misses": 19,
+            "evictions": 17,
+            "evicted_bytes": 4330400,
+            "prefetched_bytes": 0,
+            "useful_prefetched_bytes": 0,
+            "cold_or_warm": "cold"
+          },
+          "inference": {
+            "prompt_tokens": 10,
+            "generated_tokens": 32,
+            "ttft_ms": 2486.9430999970064,
+            "generation_ms": 2486.9430999970064,
+            "tokens_per_second": 12.8672,
+            "weight_wait_ms": 2266.301,
+            "load_weight_wait_ms": 9946.944,
+            "status": "ok"
+          },
+          "derived": {
+            "bytes_per_output_token": 207429.22,
+            "cache_hit_ratio": 0.968,
+            "weight_wait_fraction": 0.9113,
+            "useful_prefetch_ratio": null,
+            "unique_verified_bytes": 461264,
+            "cache_churn_bytes": 4330400
+          },
+          "environment": {
+            "os": "Windows 10",
+            "python": "3.11.15",
+            "hostname": "Eli-Joseph-Short",
+            "cpu": "Intel64 Family 6 Model 167 Stepping 1, GenuineIntel",
+            "cpu_count": 16,
+            "ram_bytes": 17028628480,
+            "gpu": "NVIDIA GeForce RTX 3050",
+            "vram_bytes": 8589410304
+          },
+          "errors": [],
+          "notes": []
+        },
+        {
+          "schema_version": "0.1",
+          "run_id": "bench-1792599173807-1",
+          "model": {
+            "repo": "hf-internal-testing/tiny-random-LlamaForCausalLM",
+            "revision": "9fb191250dd56d0ba7ec9785a025ed29c03d5998",
+            "artifact_format": "safetensors",
+            "quantization": null,
+            "backend_id": "transformers",
+            "backend_version": "0.1.0"
+          },
+          "budget": {
+            "weight_cache_limit_bytes": 524288,
+            "managed_store_limit_bytes": 21474836480,
+            "peak_weight_cache_bytes": 786432,
+            "peak_managed_store_bytes": 6527562
+          },
+          "network": {
+            "downloaded_bytes_total": 4791664,
+            "downloaded_bytes_failed": 0,
+            "range_requests": 19,
+            "full_object_requests": 0,
+            "retries": 0,
+            "source_errors": 0,
+            "profile": null
+          },
+          "cache": {
+            "hits": 575,
+            "misses": 19,
+            "evictions": 19,
+            "evicted_bytes": 4791664,
+            "prefetched_bytes": 0,
+            "useful_prefetched_bytes": 0,
+            "cold_or_warm": "cold"
+          },
+          "inference": {
+            "prompt_tokens": 10,
+            "generated_tokens": 32,
+            "ttft_ms": 2440.5018000106793,
+            "generation_ms": 2440.5018000106793,
+            "tokens_per_second": 13.1121,
+            "weight_wait_ms": 2258.86,
+            "load_weight_wait_ms": 8800.018,
+            "status": "ok"
+          },
+          "derived": {
+            "bytes_per_output_token": 149739.5,
+            "cache_hit_ratio": 0.968,
+            "weight_wait_fraction": 0.9256,
+            "useful_prefetch_ratio": null,
+            "unique_verified_bytes": 461264,
+            "cache_churn_bytes": 4791664
+          },
+          "environment": {
+            "os": "Windows 10",
+            "python": "3.11.15",
+            "hostname": "Eli-Joseph-Short",
+            "cpu": "Intel64 Family 6 Model 167 Stepping 1, GenuineIntel",
+            "cpu_count": 16,
+            "ram_bytes": 17028628480,
+            "gpu": "NVIDIA GeForce RTX 3050",
+            "vram_bytes": 8589410304
+          },
+          "errors": [],
+          "notes": []
+        },
+        {
+          "schema_version": "0.1",
+          "run_id": "bench-1792599187373-2",
+          "model": {
+            "repo": "hf-internal-testing/tiny-random-LlamaForCausalLM",
+            "revision": "9fb191250dd56d0ba7ec9785a025ed29c03d5998",
+            "artifact_format": "safetensors",
+            "quantization": null,
+            "backend_id": "transformers",
+            "backend_version": "0.1.0"
+          },
+          "budget": {
+            "weight_cache_limit_bytes": 524288,
+            "managed_store_limit_bytes": 21474836480,
+            "peak_weight_cache_bytes": 786432,
+            "peak_managed_store_bytes": 6529379
+          },
+          "network": {
+            "downloaded_bytes_total": 4791664,
+            "downloaded_bytes_failed": 0,
+            "range_requests": 19,
+            "full_object_requests": 0,
+            "retries": 0,
+            "source_errors": 0,
+            "profile": null
+          },
+          "cache": {
+            "hits": 575,
+            "misses": 19,
+            "evictions": 19,
+            "evicted_bytes": 4791664,
+            "prefetched_bytes": 0,
+            "useful_prefetched_bytes": 0,
+            "cold_or_warm": "cold"
+          },
+          "inference": {
+            "prompt_tokens": 10,
+            "generated_tokens": 32,
+            "ttft_ms": 2595.710699999472,
+            "generation_ms": 2595.710699999472,
+            "tokens_per_second": 12.328,
+            "weight_wait_ms": 2398.326,
+            "load_weight_wait_ms": 8652.052,
+            "status": "ok"
+          },
+          "derived": {
+            "bytes_per_output_token": 149739.5,
+            "cache_hit_ratio": 0.968,
+            "weight_wait_fraction": 0.924,
+            "useful_prefetch_ratio": null,
+            "unique_verified_bytes": 461264,
+            "cache_churn_bytes": 4791664
+          },
+          "environment": {
+            "os": "Windows 10",
+            "python": "3.11.15",
+            "hostname": "Eli-Joseph-Short",
+            "cpu": "Intel64 Family 6 Model 167 Stepping 1, GenuineIntel",
+            "cpu_count": 16,
+            "ram_bytes": 17028628480,
+            "gpu": "NVIDIA GeForce RTX 3050",
+            "vram_bytes": 8589410304
+          },
+          "errors": [],
+          "notes": []
+        }
+      ]
+    },
+    {
+      "model": "tiny",
+      "cache_budget_bytes": 2097152,
+      "cold_or_warm": "cold",
+      "summary": {
+        "runs": 3,
+        "downloaded_bytes_total": 13777632,
+        "bytes_per_output_token": 143517.0,
+        "cache_hit_ratio": 0.9697,
+        "weight_wait_fraction": 0.9298,
+        "ttft_ms": 2676.6476,
+        "tokens_per_second": 11.962,
+        "generated_tokens": 96,
+        "evictions": 48
+      },
+      "runs": [
+        {
+          "schema_version": "0.1",
+          "run_id": "bench-1792599200659-0",
+          "model": {
+            "repo": "hf-internal-testing/tiny-random-LlamaForCausalLM",
+            "revision": "9fb191250dd56d0ba7ec9785a025ed29c03d5998",
+            "artifact_format": "safetensors",
+            "quantization": null,
+            "backend_id": "transformers",
+            "backend_version": "0.1.0"
+          },
+          "budget": {
+            "weight_cache_limit_bytes": 2097152,
+            "managed_store_limit_bytes": 21474836480,
+            "peak_weight_cache_bytes": 2359296,
+            "peak_managed_store_bytes": 8104057
+          },
+          "network": {
+            "downloaded_bytes_total": 4592544,
+            "downloaded_bytes_failed": 0,
+            "range_requests": 18,
+            "full_object_requests": 0,
+            "retries": 0,
+            "source_errors": 0,
+            "profile": null
+          },
+          "cache": {
+            "hits": 576,
+            "misses": 18,
+            "evictions": 12,
+            "evicted_bytes": 3019680,
+            "prefetched_bytes": 0,
+            "useful_prefetched_bytes": 0,
+            "cold_or_warm": "cold"
+          },
+          "inference": {
+            "prompt_tokens": 10,
+            "generated_tokens": 32,
+            "ttft_ms": 2732.2956999996677,
+            "generation_ms": 2732.2956999996677,
+            "tokens_per_second": 11.7118,
+            "weight_wait_ms": 2543.801,
+            "load_weight_wait_ms": 8049.081,
+            "status": "ok"
+          },
+          "derived": {
+            "bytes_per_output_token": 143517.0,
+            "cache_hit_ratio": 0.9697,
+            "weight_wait_fraction": 0.931,
+            "useful_prefetch_ratio": null,
+            "unique_verified_bytes": 2034128,
+            "cache_churn_bytes": 3019680
+          },
+          "environment": {
+            "os": "Windows 10",
+            "python": "3.11.15",
+            "hostname": "Eli-Joseph-Short",
+            "cpu": "Intel64 Family 6 Model 167 Stepping 1, GenuineIntel",
+            "cpu_count": 16,
+            "ram_bytes": 17028628480,
+            "gpu": "NVIDIA GeForce RTX 3050",
+            "vram_bytes": 8589410304
+          },
+          "errors": [],
+          "notes": []
+        },
+        {
+          "schema_version": "0.1",
+          "run_id": "bench-1792599214161-1",
+          "model": {
+            "repo": "hf-internal-testing/tiny-random-LlamaForCausalLM",
+            "revision": "9fb191250dd56d0ba7ec9785a025ed29c03d5998",
+            "artifact_format": "safetensors",
+            "quantization": null,
+            "backend_id": "transformers",
+            "backend_version": "0.1.0"
+          },
+          "budget": {
+            "weight_cache_limit_bytes": 2097152,
+            "managed_store_limit_bytes": 21474836480,
+            "peak_weight_cache_bytes": 2359296,
+            "peak_managed_store_bytes": 8109974
+          },
+          "network": {
+            "downloaded_bytes_total": 4592544,
+            "downloaded_bytes_failed": 0,
+            "range_requests": 18,
+            "full_object_requests": 0,
+            "retries": 0,
+            "source_errors": 0,
+            "profile": null
+          },
+          "cache": {
+            "hits": 576,
+            "misses": 18,
+            "evictions": 18,
+            "evicted_bytes": 4592544,
+            "prefetched_bytes": 0,
+            "useful_prefetched_bytes": 0,
+            "cold_or_warm": "cold"
+          },
+          "inference": {
+            "prompt_tokens": 10,
+            "generated_tokens": 32,
+            "ttft_ms": 2588.43390000402,
+            "generation_ms": 2588.43390000402,
+            "tokens_per_second": 12.3627,
+            "weight_wait_ms": 2400.341,
+            "load_weight_wait_ms": 4628.658,
+            "status": "ok"
+          },
+          "derived": {
+            "bytes_per_output_token": 143517.0,
+            "cache_hit_ratio": 0.9697,
+            "weight_wait_fraction": 0.9273,
+            "useful_prefetch_ratio": null,
+            "unique_verified_bytes": 2034128,
+            "cache_churn_bytes": 4592544
+          },
+          "environment": {
+            "os": "Windows 10",
+            "python": "3.11.15",
+            "hostname": "Eli-Joseph-Short",
+            "cpu": "Intel64 Family 6 Model 167 Stepping 1, GenuineIntel",
+            "cpu_count": 16,
+            "ram_bytes": 17028628480,
+            "gpu": "NVIDIA GeForce RTX 3050",
+            "vram_bytes": 8589410304
+          },
+          "errors": [],
+          "notes": []
+        },
+        {
+          "schema_version": "0.1",
+          "run_id": "bench-1792599224078-2",
+          "model": {
+            "repo": "hf-internal-testing/tiny-random-LlamaForCausalLM",
+            "revision": "9fb191250dd56d0ba7ec9785a025ed29c03d5998",
+            "artifact_format": "safetensors",
+            "quantization": null,
+            "backend_id": "transformers",
+            "backend_version": "0.1.0"
+          },
+          "budget": {
+            "weight_cache_limit_bytes": 2097152,
+            "managed_store_limit_bytes": 21474836480,
+            "peak_weight_cache_bytes": 2359296,
+            "peak_managed_store_bytes": 8111792
+          },
+          "network": {
+            "downloaded_bytes_total": 4592544,
+            "downloaded_bytes_failed": 0,
+            "range_requests": 18,
+            "full_object_requests": 0,
+            "retries": 0,
+            "source_errors": 0,
+            "profile": null
+          },
+          "cache": {
+            "hits": 576,
+            "misses": 18,
+            "evictions": 18,
+            "evicted_bytes": 4592544,
+            "prefetched_bytes": 0,
+            "useful_prefetched_bytes": 0,
+            "cold_or_warm": "cold"
+          },
+          "inference": {
+            "prompt_tokens": 10,
+            "generated_tokens": 32,
+            "ttft_ms": 2709.213299996918,
+            "generation_ms": 2709.213299996918,
+            "tokens_per_second": 11.8115,
+            "weight_wait_ms": 2522.745,
+            "load_weight_wait_ms": 6181.18,
+            "status": "ok"
+          },
+          "derived": {
+            "bytes_per_output_token": 143517.0,
+            "cache_hit_ratio": 0.9697,
+            "weight_wait_fraction": 0.9312,
+            "useful_prefetch_ratio": null,
+            "unique_verified_bytes": 2034128,
+            "cache_churn_bytes": 4592544
+          },
+          "environment": {
+            "os": "Windows 10",
+            "python": "3.11.15",
+            "hostname": "Eli-Joseph-Short",
+            "cpu": "Intel64 Family 6 Model 167 Stepping 1, GenuineIntel",
+            "cpu_count": 16,
+            "ram_bytes": 17028628480,
+            "gpu": "NVIDIA GeForce RTX 3050",
+            "vram_bytes": 8589410304
+          },
+          "errors": [],
+          "notes": []
+        }
+      ]
+    },
+    {
+      "model": "tiny",
+      "cache_budget_bytes": 8388608,
+      "cold_or_warm": "cold",
+      "summary": {
+        "runs": 3,
+        "downloaded_bytes_total": 12393840,
+        "bytes_per_output_token": 129102.5,
+        "cache_hit_ratio": 0.9731,
+        "weight_wait_fraction": 0.8919,
+        "ttft_ms": 1858.4172,
+        "tokens_per_second": 17.221,
+        "generated_tokens": 96,
+        "evictions": 40
+      },
+      "runs": [
+        {
+          "schema_version": "0.1",
+          "run_id": "bench-1792599235289-0",
+          "model": {
+            "repo": "hf-internal-testing/tiny-random-LlamaForCausalLM",
+            "revision": "9fb191250dd56d0ba7ec9785a025ed29c03d5998",
+            "artifact_format": "safetensors",
+            "quantization": null,
+            "backend_id": "transformers",
+            "backend_version": "0.1.0"
+          },
+          "budget": {
+            "weight_cache_limit_bytes": 8388608,
+            "managed_store_limit_bytes": 21474836480,
+            "peak_weight_cache_bytes": 4393424,
+            "peak_managed_store_bytes": 10223051
+          },
+          "network": {
+            "downloaded_bytes_total": 4131280,
+            "downloaded_bytes_failed": 0,
+            "range_requests": 16,
+            "full_object_requests": 0,
+            "retries": 0,
+            "source_errors": 0,
+            "profile": null
+          },
+          "cache": {
+            "hits": 578,
+            "misses": 16,
+            "evictions": 8,
+            "evicted_bytes": 2034128,
+            "prefetched_bytes": 0,
+            "useful_prefetched_bytes": 0,
+            "cold_or_warm": "cold"
+          },
+          "inference": {
+            "prompt_tokens": 10,
+            "generated_tokens": 32,
+            "ttft_ms": 1847.1750000026077,
+            "generation_ms": 1847.1750000026077,
+            "tokens_per_second": 17.3238,
+            "weight_wait_ms": 1645.462,
+            "load_weight_wait_ms": 4693.429,
+            "status": "ok"
+          },
+          "derived": {
+            "bytes_per_output_token": 129102.5,
+            "cache_hit_ratio": 0.9731,
+            "weight_wait_fraction": 0.8908,
+            "useful_prefetch_ratio": null,
+            "unique_verified_bytes": 4131280,
+            "cache_churn_bytes": 2034128
+          },
+          "environment": {
+            "os": "Windows 10",
+            "python": "3.11.15",
+            "hostname": "Eli-Joseph-Short",
+            "cpu": "Intel64 Family 6 Model 167 Stepping 1, GenuineIntel",
+            "cpu_count": 16,
+            "ram_bytes": 17028628480,
+            "gpu": "NVIDIA GeForce RTX 3050",
+            "vram_bytes": 8589410304
+          },
+          "errors": [],
+          "notes": []
+        },
+        {
+          "schema_version": "0.1",
+          "run_id": "bench-1792599244300-1",
+          "model": {
+            "repo": "hf-internal-testing/tiny-random-LlamaForCausalLM",
+            "revision": "9fb191250dd56d0ba7ec9785a025ed29c03d5998",
+            "artifact_format": "safetensors",
+            "quantization": null,
+            "backend_id": "transformers",
+            "backend_version": "0.1.0"
+          },
+          "budget": {
+            "weight_cache_limit_bytes": 8388608,
+            "managed_store_limit_bytes": 21474836480,
+            "peak_weight_cache_bytes": 4393424,
+            "peak_managed_store_bytes": 10224873
+          },
+          "network": {
+            "downloaded_bytes_total": 4131280,
+            "downloaded_bytes_failed": 0,
+            "range_requests": 16,
+            "full_object_requests": 0,
+            "retries": 0,
+            "source_errors": 0,
+            "profile": null
+          },
+          "cache": {
+            "hits": 578,
+            "misses": 16,
+            "evictions": 16,
+            "evicted_bytes": 4131280,
+            "prefetched_bytes": 0,
+            "useful_prefetched_bytes": 0,
+            "cold_or_warm": "cold"
+          },
+          "inference": {
+            "prompt_tokens": 10,
+            "generated_tokens": 32,
+            "ttft_ms": 1841.3211000151932,
+            "generation_ms": 1841.3211000151932,
+            "tokens_per_second": 17.3788,
+            "weight_wait_ms": 1642.36,
+            "load_weight_wait_ms": 4380.427,
+            "status": "ok"
+          },
+          "derived": {
+            "bytes_per_output_token": 129102.5,
+            "cache_hit_ratio": 0.9731,
+            "weight_wait_fraction": 0.8919,
+            "useful_prefetch_ratio": null,
+            "unique_verified_bytes": 4131280,
+            "cache_churn_bytes": 4131280
+          },
+          "environment": {
+            "os": "Windows 10",
+            "python": "3.11.15",
+            "hostname": "Eli-Joseph-Short",
+            "cpu": "Intel64 Family 6 Model 167 Stepping 1, GenuineIntel",
+            "cpu_count": 16,
+            "ram_bytes": 17028628480,
+            "gpu": "NVIDIA GeForce RTX 3050",
+            "vram_bytes": 8589410304
+          },
+          "errors": [],
+          "notes": []
+        },
+        {
+          "schema_version": "0.1",
+          "run_id": "bench-1792599252833-2",
+          "model": {
+            "repo": "hf-internal-testing/tiny-random-LlamaForCausalLM",
+            "revision": "9fb191250dd56d0ba7ec9785a025ed29c03d5998",
+            "artifact_format": "safetensors",
+            "quantization": null,
+            "backend_id": "transformers",
+            "backend_version": "0.1.0"
+          },
+          "budget": {
+            "weight_cache_limit_bytes": 8388608,
+            "managed_store_limit_bytes": 21474836480,
+            "peak_weight_cache_bytes": 4393424,
+            "peak_managed_store_bytes": 10226695
+          },
+          "network": {
+            "downloaded_bytes_total": 4131280,
+            "downloaded_bytes_failed": 0,
+            "range_requests": 16,
+            "full_object_requests": 0,
+            "retries": 0,
+            "source_errors": 0,
+            "profile": null
+          },
+          "cache": {
+            "hits": 578,
+            "misses": 16,
+            "evictions": 16,
+            "evicted_bytes": 4131280,
+            "prefetched_bytes": 0,
+            "useful_prefetched_bytes": 0,
+            "cold_or_warm": "cold"
+          },
+          "inference": {
+            "prompt_tokens": 10,
+            "generated_tokens": 32,
+            "ttft_ms": 1886.7555000178982,
+            "generation_ms": 1886.7555000178982,
+            "tokens_per_second": 16.9603,
+            "weight_wait_ms": 1685.128,
+            "load_weight_wait_ms": 4479.759,
+            "status": "ok"
+          },
+          "derived": {
+            "bytes_per_output_token": 129102.5,
+            "cache_hit_ratio": 0.9731,
+            "weight_wait_fraction": 0.8931,
+            "useful_prefetch_ratio": null,
+            "unique_verified_bytes": 4131280,
+            "cache_churn_bytes": 4131280
+          },
+          "environment": {
+            "os": "Windows 10",
+            "python": "3.11.15",
+            "hostname": "Eli-Joseph-Short",
+            "cpu": "Intel64 Family 6 Model 167 Stepping 1, GenuineIntel",
+            "cpu_count": 16,
+            "ram_bytes": 17028628480,
+            "gpu": "NVIDIA GeForce RTX 3050",
+            "vram_bytes": 8589410304
+          },
+          "errors": [],
+          "notes": []
+        }
+      ]
+    }
+  ]
+}
