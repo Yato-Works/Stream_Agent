@@ -216,7 +216,30 @@ Offline suite after the fixes (FastAPI installed via `ensurepip` + `pip install 
   **not** exercised by this run.  The cache load + generation path is verified;
   remote-backed range retrieval remains to be re-verified on a cold cache.
 
+
 ## 11. Cache-size benchmark (2026-10-23)
+
+## 12. MoE / GGUF verification (2026-10-23)
+
+### MoE
+- Artifact: `docs/benchmarks/moe-verification.json`
+- Mechanism present: `ExpertPacking` (tensor, dim, num_experts) registered per tensor by backends;
+  `read_expert` gated on a declared packing; unit tests in `tests/test_provider.py`.
+- Backends report `supports_experts=False` (transformers backend).
+- **No real MoE checkpoint was exercised.** Expert-level remote fetch, selective loading,
+  cache budget compliance, and inference are all **unverified**. Model-map build alone is
+  not treated as inference success.
+
+### GGUF
+- Artifact: `docs/benchmarks/gguf-verification.json`
+- Model: `bartowski/SmolLM2-135M-Instruct-GGUF` @ commit `main`,
+  file `SmolLM2-135M-Instruct-IQ3_M.gguf`, size 90,213,472 bytes.
+- Header parse + model-map build: **success** (272 tensors registered).
+- Remote access: 1 Range request, `206 Partial Content`, 8,388,608 bytes (first 8 MiB header);
+  0 full-object requests.
+- Inference: **not supported** — no backend declares `gguf` in `capabilities.formats`
+  (transformers backend supports `safetensors` only). Remote-backed GGUF execution remains
+  unimplemented; model-map build is not inference success.
 
 Script: `scripts/cache_size_benchmark.py`.  Model and conditions fixed:
 `HuggingFaceTB/SmolLM2-135M-Instruct` @ `12fd25f77366fa6b3b4b768ec3050bf629380bac`,

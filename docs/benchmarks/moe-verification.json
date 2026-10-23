@@ -1,0 +1,23 @@
+{
+  "path": "moe",
+  "status": "mechanism_verified_unit_tests_only",
+  "real_model_e2e": false,
+  "reason": "No MoE checkpoint is exercised by the real-model E2E path. Expert packing is a declared mechanism (ExpertPacking registered per tensor by the backend), not auto-detected from a model map. The transformers backend reports supports_experts=False and no MoE model is in the verified model set.",
+  "mechanism_evidence": {
+    "expert_packing_unit_tests": "tests/test_provider.py (test_expert_read_requires_a_declared_packing, test_declared_expert_packing_yields_the_expert_slice, test_expert_id_outside_the_packing_is_rejected)",
+    "granularities": ["tensor", "tensor_slice", "layer", "expert"],
+    "supports_experts_flag": "backend.capabilities.supports_experts"
+  },
+  "verified": {
+    "model_map_build": false,
+    "remote_range_fetch": false,
+    "cache_budget_compliance": false,
+    "inference": false
+  },
+  "unverified": [
+    "Expert-level remote fetch on a real MoE checkpoint",
+    "Selective expert loading (only required experts fetched)",
+    "Cache usage under expert-level access"
+  ],
+  "note": "Model-map build alone is not treated as inference success. No claim of MoE E2E success is made."
+}

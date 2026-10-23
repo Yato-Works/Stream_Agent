@@ -1,0 +1,31 @@
+{
+  "repo": "bartowski/SmolLM2-135M-Instruct-GGUF",
+  "revision": "main",
+  "artifact_format": "gguf",
+  "file": "SmolLM2-135M-Instruct-IQ3_M.gguf",
+  "file_size": 90213472,
+  "tensors": 272,
+  "range_events": [
+    {
+      "event": "range_request",
+      "path": "SmolLM2-135M-Instruct-IQ3_M.gguf",
+      "start": 0,
+      "end": 8388607,
+      "status": null,
+      "content_range": null,
+      "bytes": null
+    },
+    {
+      "event": "range_ok",
+      "path": "SmolLM2-135M-Instruct-IQ3_M.gguf",
+      "start": 0,
+      "end": 8388607,
+      "status": 206,
+      "content_range": "bytes 0-8388607/90213472",
+      "bytes": 8388608
+    }
+  ],
+  "full_object_events": [],
+  "inference_supported": false,
+  "inference_note": "No backend supports gguf format (transformers backend formats=('safetensors',)); model-map build only."
+}
