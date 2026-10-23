@@ -37,5 +37,14 @@
     "model": "bartowski/SmolLM2-135M-Instruct-GGUF (IQ3_M)",
     "dependency": "gguf 0.19.0 + accelerate 1.15.0"
   },
-  "local_inference_supported": true
+  "local_inference_supported": true,
+  "tensor_body_range_fetch": {
+    "attempted": true,
+    "result": "success",
+    "tensor": "blk.0.attn_norm.weight",
+    "bytes": 2304,
+    "http_status": 206,
+    "byte_match_local": true,
+    "artifact": "docs/benchmarks/gguf-tensor-range.json"
+  }
 }

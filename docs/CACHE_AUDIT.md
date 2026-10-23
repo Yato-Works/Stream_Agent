@@ -239,8 +239,10 @@ Offline suite after the fixes (FastAPI installed via `ensurepip` + `pip install 
   0 full-object requests.
 - Inference: **local inference succeeded** (transformers 5.20.2 + gguf 0.19.0 + accelerate 1.15.0):
   load 11.484 s, generation 0.209 s, output `"Hello\n\nI'm"` (4 new tokens).
-  Remote-backed GGUF execution (tensor body via Range + cache budget) remains unimplemented;
-  model-map build alone is not remote execution.
+- Tensor body remote Range fetch: **success** — `blk.0.attn_norm.weight`, 2,304 bytes,
+  HTTP 206, byte-identical to local cache (`docs/benchmarks/gguf-tensor-range.json`).
+- Remote-backed GGUF execution under cache budget: **not implemented** (no backend supports
+  `gguf` format in Stream Agent); model-map build alone is not remote execution.
 
 Script: `scripts/cache_size_benchmark.py`.  Model and conditions fixed:
 `HuggingFaceTB/SmolLM2-135M-Instruct` @ `12fd25f77366fa6b3b4b768ec3050bf629380bac`,

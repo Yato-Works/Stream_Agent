@@ -1,0 +1,40 @@
+{
+  "repo": "bartowski/SmolLM2-135M-Instruct-GGUF",
+  "revision": "main",
+  "file": "SmolLM2-135M-Instruct-IQ3_M.gguf",
+  "tensor": "blk.0.attn_norm.weight",
+  "tensor_type": 8,
+  "tensor_shape": [
+    576
+  ],
+  "tensor_bytes": 2304,
+  "range_start": 31866976,
+  "range_end": 31869279,
+  "fetched_bytes": 2304,
+  "byte_match_local": true,
+  "remote_sha256": "2469079d969a361823be8145fa36e15e4c1b933b5261d669357b3deead825cba",
+  "local_sha256": "2469079d969a361823be8145fa36e15e4c1b933b5261d669357b3deead825cba",
+  "range_events": [
+    {
+      "event": "range_request",
+      "path": "SmolLM2-135M-Instruct-IQ3_M.gguf",
+      "start": 31866976,
+      "end": 31869279,
+      "status": null,
+      "content_range": null,
+      "bytes": null
+    },
+    {
+      "event": "range_ok",
+      "path": "SmolLM2-135M-Instruct-IQ3_M.gguf",
+      "start": 31866976,
+      "end": 31869279,
+      "status": 206,
+      "content_range": "bytes 31866976-31869279/90213472",
+      "bytes": 2304
+    }
+  ],
+  "full_object_events": [],
+  "inference": "not_implemented_remote (no gguf backend in Stream Agent; local inference verified separately)",
+  "cache_budget_run": "not_attempted (no backend supports gguf format)"
+}
