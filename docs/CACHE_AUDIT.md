@@ -175,8 +175,8 @@ gap; see item 1 below.
    offline-runnable entry point (no network, GPU, or `torch`) that runs the cache suites
    and emits a JSON pass/fail summary.  `docs/benchmarks/tiny-random-llama-cache-sweep.json`
    remains the recorded artifact from the original run.
-2. **`torch` not installed** in the audit environment, so G3 and the sweep cannot be
-   re-run here; only the recorded artifacts are available.
+2. **`torch` now installed** (2.14.1+cpu) and real-model E2E re-run succeeded (§9).
+   Remote-backed Range retrieval still needs a cold-cache re-run to fully verify.
 3. **`fastapi` installed** via `ensurepip` + `pip install fastapi` (the `server` extra).
    The 7 `test_server.py` errors are now resolved; the full suite is green.
 4. **No MoE model validated end to end** (expert interface exists, no measured result).
@@ -200,6 +200,19 @@ Offline suite after the fixes (FastAPI installed via `ensurepip` + `pip install 
 * Cache-related tests (`test_cache_core`, `test_cache_limits`, `test_multi_model`): 30/30 pass.
 * `test_server.py` (7 tests): now pass after installing the `server` extra.
 * `test_network_e2e.py` (1 test): passes (network reachable).
-* Real-model E2E (`scripts/real_model_e2e.py`) and the cache sweep still require `torch`
-  and were NOT re-run in this environment; their recorded artifacts remain the evidence.
+## 9. Real-model E2E re-run (2026-10-23, torch 2.14.1+cpu)
+
+`scripts/real_model_e2e.py` was re-run against `HuggingFaceTB/SmolLM2-135M-Instruct`
+(revision `12fd25f77366fa6b3b4b768ec3050bf629380bac`) on CPU with float32:
+
+* Result artifact: `docs/benchmarks/real-model-smollm2-135m-rerun.json`
+* Registered: yes (272 tensors, 269,060,552 weight bytes, 1 shard).
+* Load: 24.529 s; managed store 276,651,813 bytes.
+* Generation: succeeded — 8 tokens, `" Emily, and I'm a senior at"`,
+  finish_reason `length`, weight_wait_ms 0.0.
+* Cache: used 269,060,552 / 536,870,912 bytes (within W); 304 cache hits, 0 misses.
+* Caveat: `downloaded_bytes = 0` / `range_requests = 0` — the model was already
+  present in the local Hugging Face cache, so the bounded Range-retrieval path was
+  **not** exercised by this run.  The cache load + generation path is verified;
+  remote-backed range retrieval remains to be re-verified on a cold cache.
 
