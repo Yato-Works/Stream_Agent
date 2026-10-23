@@ -1,0 +1,257 @@
+{
+  "model": "HuggingFaceTB/SmolLM2-135M-Instruct",
+  "revision": "12fd25f77366fa6b3b4b768ec3050bf629380bac",
+  "device": "cpu",
+  "dtype": "float32",
+  "materialize": "eager",
+  "max_tokens": 8,
+  "limits": [
+    {
+      "cache_limit_bytes": 524288,
+      "cold": {
+        "repo": "HuggingFaceTB/SmolLM2-135M-Instruct",
+        "revision": "12fd25f77366fa6b3b4b768ec3050bf629380bac",
+        "license": "apache-2.0",
+        "device": "cpu",
+        "dtype": "float32",
+        "materialize": "eager",
+        "max_tokens": 8,
+        "prompt": "Hello, my name is",
+        "weight_cache_limit_bytes": 524288,
+        "registered": true,
+        "error": "WorkingSetExceedsBudget: [WORKING_SET_EXCEEDS_BUDGET] the pinned working set does not fit into the configured cache budget",
+        "error_details": {
+          "pinned_bytes": 0,
+          "weight_cache_limit_bytes": 524288,
+          "requested_bytes": 8388608
+        },
+        "ok": false,
+        "_wall_seconds": 15.603,
+        "_returncode": 1,
+        "_bytes_per_token": null,
+        "_within_budget": null
+      },
+      "warm": {
+        "repo": "HuggingFaceTB/SmolLM2-135M-Instruct",
+        "revision": "12fd25f77366fa6b3b4b768ec3050bf629380bac",
+        "license": "apache-2.0",
+        "device": "cpu",
+        "dtype": "float32",
+        "materialize": "eager",
+        "max_tokens": 8,
+        "prompt": "Hello, my name is",
+        "weight_cache_limit_bytes": 524288,
+        "registered": true,
+        "error": "WorkingSetExceedsBudget: [WORKING_SET_EXCEEDS_BUDGET] the pinned working set does not fit into the configured cache budget",
+        "error_details": {
+          "pinned_bytes": 0,
+          "weight_cache_limit_bytes": 524288,
+          "requested_bytes": 8388608
+        },
+        "ok": false,
+        "_wall_seconds": 11.54,
+        "_returncode": 1,
+        "_bytes_per_token": null,
+        "_within_budget": null
+      }
+    },
+    {
+      "cache_limit_bytes": 1048576,
+      "cold": {
+        "repo": "HuggingFaceTB/SmolLM2-135M-Instruct",
+        "revision": "12fd25f77366fa6b3b4b768ec3050bf629380bac",
+        "license": "apache-2.0",
+        "device": "cpu",
+        "dtype": "float32",
+        "materialize": "eager",
+        "max_tokens": 8,
+        "prompt": "Hello, my name is",
+        "weight_cache_limit_bytes": 1048576,
+        "registered": true,
+        "error": "WorkingSetExceedsBudget: [WORKING_SET_EXCEEDS_BUDGET] the pinned working set does not fit into the configured cache budget",
+        "error_details": {
+          "pinned_bytes": 0,
+          "weight_cache_limit_bytes": 1048576,
+          "requested_bytes": 8388608
+        },
+        "ok": false,
+        "_wall_seconds": 13.806,
+        "_returncode": 1,
+        "_bytes_per_token": null,
+        "_within_budget": null
+      },
+      "warm": {
+        "repo": "HuggingFaceTB/SmolLM2-135M-Instruct",
+        "revision": "12fd25f77366fa6b3b4b768ec3050bf629380bac",
+        "license": "apache-2.0",
+        "device": "cpu",
+        "dtype": "float32",
+        "materialize": "eager",
+        "max_tokens": 8,
+        "prompt": "Hello, my name is",
+        "weight_cache_limit_bytes": 1048576,
+        "registered": true,
+        "error": "WorkingSetExceedsBudget: [WORKING_SET_EXCEEDS_BUDGET] the pinned working set does not fit into the configured cache budget",
+        "error_details": {
+          "pinned_bytes": 0,
+          "weight_cache_limit_bytes": 1048576,
+          "requested_bytes": 8388608
+        },
+        "ok": false,
+        "_wall_seconds": 11.375,
+        "_returncode": 1,
+        "_bytes_per_token": null,
+        "_within_budget": null
+      }
+    },
+    {
+      "cache_limit_bytes": 2097152,
+      "cold": {
+        "repo": "HuggingFaceTB/SmolLM2-135M-Instruct",
+        "revision": "12fd25f77366fa6b3b4b768ec3050bf629380bac",
+        "license": "apache-2.0",
+        "device": "cpu",
+        "dtype": "float32",
+        "materialize": "eager",
+        "max_tokens": 8,
+        "prompt": "Hello, my name is",
+        "weight_cache_limit_bytes": 2097152,
+        "registered": true,
+        "error": "WorkingSetExceedsBudget: [WORKING_SET_EXCEEDS_BUDGET] the pinned working set does not fit into the configured cache budget",
+        "error_details": {
+          "pinned_bytes": 0,
+          "weight_cache_limit_bytes": 2097152,
+          "requested_bytes": 8388608
+        },
+        "ok": false,
+        "_wall_seconds": 13.439,
+        "_returncode": 1,
+        "_bytes_per_token": null,
+        "_within_budget": null
+      },
+      "warm": {
+        "repo": "HuggingFaceTB/SmolLM2-135M-Instruct",
+        "revision": "12fd25f77366fa6b3b4b768ec3050bf629380bac",
+        "license": "apache-2.0",
+        "device": "cpu",
+        "dtype": "float32",
+        "materialize": "eager",
+        "max_tokens": 8,
+        "prompt": "Hello, my name is",
+        "weight_cache_limit_bytes": 2097152,
+        "registered": true,
+        "error": "WorkingSetExceedsBudget: [WORKING_SET_EXCEEDS_BUDGET] the pinned working set does not fit into the configured cache budget",
+        "error_details": {
+          "pinned_bytes": 0,
+          "weight_cache_limit_bytes": 2097152,
+          "requested_bytes": 8388608
+        },
+        "ok": false,
+        "_wall_seconds": 11.888,
+        "_returncode": 1,
+        "_bytes_per_token": null,
+        "_within_budget": null
+      }
+    },
+    {
+      "cache_limit_bytes": 4194304,
+      "cold": {
+        "repo": "HuggingFaceTB/SmolLM2-135M-Instruct",
+        "revision": "12fd25f77366fa6b3b4b768ec3050bf629380bac",
+        "license": "apache-2.0",
+        "device": "cpu",
+        "dtype": "float32",
+        "materialize": "eager",
+        "max_tokens": 8,
+        "prompt": "Hello, my name is",
+        "weight_cache_limit_bytes": 4194304,
+        "registered": true,
+        "error": "WorkingSetExceedsBudget: [WORKING_SET_EXCEEDS_BUDGET] the pinned working set does not fit into the configured cache budget",
+        "error_details": {
+          "pinned_bytes": 0,
+          "weight_cache_limit_bytes": 4194304,
+          "requested_bytes": 8388608
+        },
+        "ok": false,
+        "_wall_seconds": 13.826,
+        "_returncode": 1,
+        "_bytes_per_token": null,
+        "_within_budget": null
+      },
+      "warm": {
+        "repo": "HuggingFaceTB/SmolLM2-135M-Instruct",
+        "revision": "12fd25f77366fa6b3b4b768ec3050bf629380bac",
+        "license": "apache-2.0",
+        "device": "cpu",
+        "dtype": "float32",
+        "materialize": "eager",
+        "max_tokens": 8,
+        "prompt": "Hello, my name is",
+        "weight_cache_limit_bytes": 4194304,
+        "registered": true,
+        "error": "WorkingSetExceedsBudget: [WORKING_SET_EXCEEDS_BUDGET] the pinned working set does not fit into the configured cache budget",
+        "error_details": {
+          "pinned_bytes": 0,
+          "weight_cache_limit_bytes": 4194304,
+          "requested_bytes": 8388608
+        },
+        "ok": false,
+        "_wall_seconds": 13.17,
+        "_returncode": 1,
+        "_bytes_per_token": null,
+        "_within_budget": null
+      }
+    },
+    {
+      "cache_limit_bytes": 8388608,
+      "cold": {
+        "repo": "HuggingFaceTB/SmolLM2-135M-Instruct",
+        "revision": "12fd25f77366fa6b3b4b768ec3050bf629380bac",
+        "license": "apache-2.0",
+        "device": "cpu",
+        "dtype": "float32",
+        "materialize": "eager",
+        "max_tokens": 8,
+        "prompt": "Hello, my name is",
+        "weight_cache_limit_bytes": 8388608,
+        "registered": true,
+        "error": "CacheBudgetExceeded: [CACHE_BUDGET_EXCEEDED] cache budget exhausted and no capacity will be released",
+        "error_details": {
+          "used_bytes": 8388608,
+          "reserved_bytes": 0,
+          "weight_cache_limit_bytes": 8388608,
+          "requested_bytes": 8388608
+        },
+        "ok": false,
+        "_wall_seconds": 59.77,
+        "_returncode": 1,
+        "_bytes_per_token": null,
+        "_within_budget": null
+      },
+      "warm": {
+        "repo": "HuggingFaceTB/SmolLM2-135M-Instruct",
+        "revision": "12fd25f77366fa6b3b4b768ec3050bf629380bac",
+        "license": "apache-2.0",
+        "device": "cpu",
+        "dtype": "float32",
+        "materialize": "eager",
+        "max_tokens": 8,
+        "prompt": "Hello, my name is",
+        "weight_cache_limit_bytes": 8388608,
+        "registered": true,
+        "error": "CacheBudgetExceeded: [CACHE_BUDGET_EXCEEDED] cache budget exhausted and no capacity will be released",
+        "error_details": {
+          "used_bytes": 8388608,
+          "reserved_bytes": 0,
+          "weight_cache_limit_bytes": 8388608,
+          "requested_bytes": 8388608
+        },
+        "ok": false,
+        "_wall_seconds": 64.733,
+        "_returncode": 1,
+        "_bytes_per_token": null,
+        "_within_budget": null
+      }
+    }
+  ]
+}

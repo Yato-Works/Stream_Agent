@@ -216,6 +216,64 @@ Offline suite after the fixes (FastAPI installed via `ensurepip` + `pip install 
   **not** exercised by this run.  The cache load + generation path is verified;
   remote-backed range retrieval remains to be re-verified on a cold cache.
 
+## 11. Cache-size benchmark (2026-10-23)
+
+Script: `scripts/cache_size_benchmark.py`.  Model and conditions fixed:
+`HuggingFaceTB/SmolLM2-135M-Instruct` @ `12fd25f77366fa6b3b4b768ec3050bf629380bac`,
+CPU, float32, eager materialize, 8 generated tokens, isolated storage root per limit.
+
+### 11.1 Requested small limits (512 KiB – 8 MiB): non-runnable
+
+| Cache limit | Outcome |
+|---|---|
+| 512 KiB | `WorkingSetExceedsBudget` (pinned working set 8,388,608 bytes > 524,288) |
+| 1 MiB | `WorkingSetExceedsBudget` |
+| 2 MiB | `WorkingSetExceedsBudget` |
+| 4 MiB | `WorkingSetExceedsBudget` |
+| 8 MiB | `CacheBudgetExceeded` (reserve cannot free capacity) |
+
+Artifact: `docs/benchmarks/cache-size-benchmark.json` (all entries `ok: false`).
+Root cause: the cache block granularity is 8 MiB, so any limit below one block
+cannot host even a single block; limits at/just above one block cannot sustain the
+working set of a forward pass.  These limits are therefore **below the runnable
+floor** and cannot produce transfer/timing numbers — reported as measured failures,
+not estimates.
+
+### 11.2 Runnable limit (512 MiB): cold vs. warm
+
+| Metric | Cold (first fetch) | Warm (re-run, same root) |
+|---|---|---|
+| `downloaded_bytes` | 227,117,512 | 0 |
+| `range_requests` | 59 | 3 (header/probe only) |
+| `full_object_requests` | 0 | 0 |
+| `cache_hits` / `misses` | 276 / 28 | 304 / 0 |
+| `load_seconds` | 89.132 | 17.751 |
+| `generation_seconds` | 0.374 | 0.299 |
+| `bytes_per_token` (downloaded/generated) | 28,389,689.0 | 0.0 |
+| `cache_used_bytes` / limit | 269,060,552 / 536,870,912 | 269,060,552 / 536,870,912 |
+| Within budget (W) | yes | yes |
+
+Cold artifact: `docs/benchmarks/real-model-smollm2-135m-cold-cache.json`
+Warm artifact: `docs/benchmarks/real-model-smollm2-135m-warm-512m.json`
+
+Conclusion: at a runnable budget the cache eliminates remote transfer on re-run
+(0 bytes, 0 misses) while preserving generation output; cold path transfers ~84 %
+of the artifact via validated Range requests only.
+
+`scripts/real_model_e2e.py` was re-run against `HuggingFaceTB/SmolLM2-135M-Instruct`
+(revision `12fd25f77366fa6b3b4b768ec3050bf629380bac`) on CPU with float32:
+
+* Result artifact: `docs/benchmarks/real-model-smollm2-135m-rerun.json`
+* Registered: yes (272 tensors, 269,060,552 weight bytes, 1 shard).
+* Load: 24.529 s; managed store 276,651,813 bytes.
+* Generation: succeeded — 8 tokens, `" Emily, and I'm a senior at"`,
+  finish_reason `length`, weight_wait_ms 0.0.
+* Cache: used 269,060,552 / 536,870,912 bytes (within W); 304 cache hits, 0 misses.
+* Caveat: `downloaded_bytes = 0` / `range_requests = 0` — the model was already
+  present in the local Hugging Face cache, so the bounded Range-retrieval path was
+  **not** exercised by this run.  The cache load + generation path is verified;
+  remote-backed range retrieval remains to be re-verified on a cold cache.
+
 ## 10. Cold-cache Remote Range verification (2026-10-23)
 
 A second E2E run was performed against an **isolated, empty Stream Agent cache root**
