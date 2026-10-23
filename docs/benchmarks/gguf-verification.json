@@ -27,5 +27,11 @@
   ],
   "full_object_events": [],
   "inference_supported": false,
-  "inference_note": "No backend supports gguf format (transformers backend formats=('safetensors',)); model-map build only."
+  "inference_note": "No backend supports gguf format (transformers backend formats=('safetensors',)); model-map build only.",
+  "local_inference_attempt": {
+    "attempted": true,
+    "result": "blocked",
+    "reason": "transformers 5.20.2 requires gguf>=0.10.0 package (not installed in venv); no inference performed.",
+    "dependency_missing": "gguf"
+  }
 }
