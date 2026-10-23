@@ -216,3 +216,46 @@ Offline suite after the fixes (FastAPI installed via `ensurepip` + `pip install 
   **not** exercised by this run.  The cache load + generation path is verified;
   remote-backed range retrieval remains to be re-verified on a cold cache.
 
+## 10. Cold-cache Remote Range verification (2026-10-23)
+
+A second E2E run was performed against an **isolated, empty Stream Agent cache root**
+(`C:/Users/smily/.stream-agent-cold`, deleted before the run) so that no managed-store
+block could be reused from a prior run.  The Hugging Face cache was left untouched.
+
+* Result artifact: `docs/benchmarks/real-model-smollm2-135m-cold-cache.json`
+* Storage root: `C:/Users/smily/.stream-agent-cold` (isolated; not the default `~/.stream-agent`)
+* Source destination: `huggingface.co`
+* Model: `HuggingFaceTB/SmolLM2-135M-Instruct` @ `12fd25f77366fa6b3b4b768ec3050bf629380bac`
+* Registered: yes (272 tensors, 269,060,552 weight bytes).
+* Remote Range evidence:
+  * `range_requests` = **59** (all validated HTTP **206** with matching `Content-Range`).
+  * `full_object_requests` = **0** (no silent full download).
+  * Sample (first probe): `GET .../model.safetensors` with `Range: bytes=0-63` →
+    `206`, `Content-Range: bytes 0-63/269060552`, 64 bytes.
+  * Further samples: `bytes=0-1048575` → 206 / `bytes 0-1048575/269060552` / 1,048,576 bytes;
+    `bytes=25165824-33554431` → 206 / matching Content-Range / 8,388,608 bytes.
+* Accounting: `downloaded_bytes` = 227,117,512 (84.4 % of the 269,060,552-byte artifact);
+  `cache_misses` = 28, `cache_hits` = 276 (intra-run block reuse).
+* Budget: `cache_used_bytes` = 269,060,552 ≤ 536,870,912 (W); managed store 276,647,717 bytes.
+* Generation: succeeded — 8 tokens, `" Emily, and I'm a senior at"`,
+  finish_reason `length`, weight_wait_ms 0.0.
+
+Conclusion: the Remote-backed Range retrieval path is **verified** under a cold cache:
+HTTP Range requests (206 + validated Content-Range) were the only transfer mechanism,
+no full-object download occurred, and generation succeeded within the cache budget.
+The earlier `downloaded_bytes = 0` caveat in §9 is superseded by this run.
+
+`scripts/real_model_e2e.py` was re-run against `HuggingFaceTB/SmolLM2-135M-Instruct`
+(revision `12fd25f77366fa6b3b4b768ec3050bf629380bac`) on CPU with float32:
+
+* Result artifact: `docs/benchmarks/real-model-smollm2-135m-rerun.json`
+* Registered: yes (272 tensors, 269,060,552 weight bytes, 1 shard).
+* Load: 24.529 s; managed store 276,651,813 bytes.
+* Generation: succeeded — 8 tokens, `" Emily, and I'm a senior at"`,
+  finish_reason `length`, weight_wait_ms 0.0.
+* Cache: used 269,060,552 / 536,870,912 bytes (within W); 304 cache hits, 0 misses.
+* Caveat: `downloaded_bytes = 0` / `range_requests = 0` — the model was already
+  present in the local Hugging Face cache, so the bounded Range-retrieval path was
+  **not** exercised by this run.  The cache load + generation path is verified;
+  remote-backed range retrieval remains to be re-verified on a cold cache.
+

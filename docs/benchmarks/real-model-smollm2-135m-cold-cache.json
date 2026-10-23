@@ -1,0 +1,91 @@
+{
+  "repo": "HuggingFaceTB/SmolLM2-135M-Instruct",
+  "revision": "12fd25f77366fa6b3b4b768ec3050bf629380bac",
+  "license": "apache-2.0",
+  "device": "cpu",
+  "dtype": "float32",
+  "materialize": "eager",
+  "max_tokens": 8,
+  "prompt": "Hello, my name is",
+  "weight_cache_limit_bytes": 536870912,
+  "registered": true,
+  "load_seconds": 89.132,
+  "tensors": 272,
+  "total_weight_bytes": 269060552,
+  "shards": {
+    "model.safetensors": 269060552
+  },
+  "generation_seconds": 0.374,
+  "text": " Emily, and I'm a senior at",
+  "generated_tokens": 8,
+  "prompt_tokens": 5,
+  "weight_wait_ms": 0.0,
+  "load_weight_wait_ms": 77394.587,
+  "finish_reason": "length",
+  "cache_used_bytes": 269060552,
+  "cache_limit_bytes": 536870912,
+  "managed_store_bytes": 276647717,
+  "downloaded_bytes": 227117512,
+  "range_requests": 59,
+  "full_object_requests": 0,
+  "cache_hits": 276,
+  "cache_misses": 28,
+  "range_request_samples": [
+    {
+      "path": "model.safetensors",
+      "requested": [
+        0,
+        63
+      ],
+      "status": 206,
+      "content_range": "bytes 0-63/269060552",
+      "bytes": 64
+    },
+    {
+      "path": "model.safetensors",
+      "requested": [
+        0,
+        1048575
+      ],
+      "status": 206,
+      "content_range": "bytes 0-1048575/269060552",
+      "bytes": 1048576
+    },
+    {
+      "path": "model.safetensors",
+      "requested": [
+        0,
+        63
+      ],
+      "status": 206,
+      "content_range": "bytes 0-63/269060552",
+      "bytes": 64
+    },
+    {
+      "path": "model.safetensors",
+      "requested": [
+        25165824,
+        33554431
+      ],
+      "status": 206,
+      "content_range": "bytes 25165824-33554431/269060552",
+      "bytes": 8388608
+    },
+    {
+      "path": "model.safetensors",
+      "requested": [
+        8388608,
+        16777215
+      ],
+      "status": 206,
+      "content_range": "bytes 8388608-16777215/269060552",
+      "bytes": 8388608
+    }
+  ],
+  "source_destinations": [
+    "huggingface.co"
+  ],
+  "storage_root": "C:\\Users\\smily\\.stream-agent-cold",
+  "artifact_bytes": 269060552,
+  "downloaded_fraction_of_artifact": 0.8441
+}

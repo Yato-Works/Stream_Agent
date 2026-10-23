@@ -278,6 +278,19 @@ class HuggingFaceSource:
                 f"source returned {len(body)} bytes for a {expected} byte range of {path}",
                 details={"path": path, "expected": expected, "actual": len(body)},
             )
+        self._telemetry(
+            "range_ok",
+            {
+                "repo": repo,
+                "commit": commit,
+                "path": path,
+                "start": start,
+                "end": end,
+                "status": status,
+                "content_range": content_range,
+                "bytes": len(body),
+            },
+        )
         return body
 
     async def _backoff(self, attempt: int) -> None:

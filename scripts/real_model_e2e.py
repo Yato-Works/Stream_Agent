@@ -117,6 +117,9 @@ async def run(args: argparse.Namespace) -> int:
         record["full_object_requests"] = runtime.telemetry.network.full_object_requests
         record["cache_hits"] = runtime.telemetry.cache.hits
         record["cache_misses"] = runtime.telemetry.cache.misses
+        record["range_request_samples"] = runtime.telemetry.network.range_request_samples
+        record["source_destinations"] = runtime.telemetry.network.destinations
+        record["storage_root"] = str(storage.root)
         artifact_bytes = record.get("total_weight_bytes") or 0
         record["artifact_bytes"] = artifact_bytes
         record["downloaded_fraction_of_artifact"] = (

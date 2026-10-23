@@ -24,6 +24,8 @@ MIB = 1024**2
 class NetworkCounters:
     range_requests: int = 0
     full_object_requests: int = 0
+    #: Validated Range responses actually received (each carries HTTP 206).
+    range_request_samples: list[dict[str, Any]] = field(default_factory=list)
     downloaded_bytes: int = 0
     downloaded_bytes_failed: int = 0
     #: Bytes received for the weight payload (the blocks the cache stores).
@@ -239,6 +241,7 @@ class RunTelemetry:
                 "downloaded_bytes_failed": self.network.downloaded_bytes_failed,
                 "range_requests": self.network.range_requests,
                 "full_object_requests": self.network.full_object_requests,
+                "range_request_samples": list(self.network.range_request_samples),
                 "retries": self.network.retries,
                 "source_errors": self.network.source_errors,
                 "destinations": list(self.network.destinations),

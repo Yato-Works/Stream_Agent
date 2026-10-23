@@ -153,6 +153,18 @@ class StreamAgentRuntime:
                 "the source answered a range request with a full object; the body was discarded",
                 **payload,
             )
+        elif event == "range_ok":
+            telemetry.network.range_requests += 1
+            if len(telemetry.network.range_request_samples) < 5:
+                telemetry.network.range_request_samples.append(
+                    {
+                        "path": payload.get("path"),
+                        "requested": [payload.get("start"), payload.get("end")],
+                        "status": payload.get("status"),
+                        "content_range": payload.get("content_range"),
+                        "bytes": payload.get("bytes"),
+                    }
+                )
         elif event == "retry":
             telemetry.network.retries += 1
 
