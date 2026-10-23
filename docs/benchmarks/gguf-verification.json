@@ -46,5 +46,32 @@
     "http_status": 206,
     "byte_match_local": true,
     "artifact": "docs/benchmarks/gguf-tensor-range.json"
+  },
+  "cache_budget_compliance": {
+    "artifact": "docs/benchmarks/gguf-cache-budget.json",
+    "budgets_tested": [
+      "67108864",
+      "104857600"
+    ],
+    "results": {
+      "67108864": {
+        "cache_used_bytes": 65047648,
+        "within_budget": true,
+        "inference": "success"
+      },
+      "104857600": {
+        "cache_used_bytes": 90213472,
+        "within_budget": true,
+        "inference": "success"
+      }
+    }
+  },
+  "verified": {
+    "model_map_build": true,
+    "remote_range_fetch": true,
+    "tensor_body_range_fetch": true,
+    "cache_budget_compliance": true,
+    "local_inference": true,
+    "remote_streaming_inference": false
   }
 }

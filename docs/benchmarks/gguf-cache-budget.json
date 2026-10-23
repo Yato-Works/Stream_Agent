@@ -1,0 +1,40 @@
+{
+  "67108864": {
+    "cache_limit_bytes": 67108864,
+    "file_size_bytes": 90213472,
+    "shard": "SmolLM2-135M-Instruct-IQ3_M.gguf",
+    "shard_size": 90213472,
+    "fetch_seconds": 14.553,
+    "fetched_bytes": 90213472,
+    "fetch_ok": true,
+    "load_seconds": 12.434,
+    "gen_seconds": 0.204,
+    "output": "Hello\n\nI'm",
+    "cache_used_bytes": 65047648,
+    "within_budget": true,
+    "downloaded_bytes": 90213472,
+    "range_requests": 23,
+    "full_object_requests": 0,
+    "cache_hits": 0,
+    "cache_misses": 11
+  },
+  "104857600": {
+    "cache_limit_bytes": 104857600,
+    "file_size_bytes": 90213472,
+    "shard": "SmolLM2-135M-Instruct-IQ3_M.gguf",
+    "shard_size": 90213472,
+    "fetch_seconds": 19.688,
+    "fetched_bytes": 90213472,
+    "fetch_ok": true,
+    "load_seconds": 10.948,
+    "gen_seconds": 0.161,
+    "output": "Hello\n\nI'm",
+    "cache_used_bytes": 90213472,
+    "within_budget": true,
+    "downloaded_bytes": 90213472,
+    "range_requests": 23,
+    "full_object_requests": 0,
+    "cache_hits": 0,
+    "cache_misses": 11
+  }
+}

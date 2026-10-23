@@ -241,8 +241,10 @@ Offline suite after the fixes (FastAPI installed via `ensurepip` + `pip install 
   load 11.484 s, generation 0.209 s, output `"Hello\n\nI'm"` (4 new tokens).
 - Tensor body remote Range fetch: **success** — `blk.0.attn_norm.weight`, 2,304 bytes,
   HTTP 206, byte-identical to local cache (`docs/benchmarks/gguf-tensor-range.json`).
-- Remote-backed GGUF execution under cache budget: **not implemented** (no backend supports
-  `gguf` format in Stream Agent); model-map build alone is not remote execution.
+- Cache-budget compliance (whole-file fetch into bounded cache): **pass** for 64 MiB and 100 MiB
+  budgets; cache_used 62 MiB / 86 MiB respectively, inference succeeded in both
+  (`docs/benchmarks/gguf-cache-budget.json`). Note: this is whole-file fetch, not
+  tensor streaming; Stream Agent has no GGUF backend yet.
 
 Script: `scripts/cache_size_benchmark.py`.  Model and conditions fixed:
 `HuggingFaceTB/SmolLM2-135M-Instruct` @ `12fd25f77366fa6b3b4b768ec3050bf629380bac`,
