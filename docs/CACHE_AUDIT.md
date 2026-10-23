@@ -345,3 +345,15 @@ The earlier `downloaded_bytes = 0` caveat in §9 is superseded by this run.
   **not** exercised by this run.  The cache load + generation path is verified;
   remote-backed range retrieval remains to be re-verified on a cold cache.
 
+
+## 13. GGUF integrated E2E evidence status (2026-10-23)
+
+Existing GGUF evidence is spread across separate artifacts and runs:
+- gguf-verification.json: header parse + model-map build (272 tensors), remote Range header fetch.
+- gguf-tensor-range.json: tensor body Range fetch (2,304 bytes, byte-identical), no inference.
+- gguf-cache-budget.json: whole-file fetch into bounded cache, inference, budget compliance.
+No single run previously combined all conditions. This is recorded as separate evidence;
+integrated verification would require one run combining cold cache -> Range header ->
+tensor Range (byte-identical) -> whole-file fetch -> inference -> budget + no full-object.
+Stream Agent has no GGUF backend, so tensor streaming is not implemented; whole-file fetch
+remains the only integrated path. Conditions 1-5 are individually evidenced but not in one run.
