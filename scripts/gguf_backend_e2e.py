@@ -1,6 +1,10 @@
 from __future__ import annotations
 import argparse, asyncio, json, shutil, sys, time
 from pathlib import Path
+try:
+    import psutil
+except Exception:
+    psutil = None
 from stream_agent.config import Config, ModelConfig, ServerConfig, SourceConfig, StorageConfig
 from stream_agent.runtime import StreamAgentRuntime
 
@@ -29,6 +33,21 @@ async def run(args):
     )
     runtime = StreamAgentRuntime(config)
     await runtime.start()
+    max_rss = 0
+
+    async def _sample_rss() -> None:
+        nonlocal max_rss
+        while True:
+            if psutil is not None:
+                try:
+                    rss = psutil.Process().memory_info().rss
+                    if rss > max_rss:
+                        max_rss = rss
+                except Exception:
+                    pass
+            await asyncio.sleep(0.5)
+
+    rss_task = asyncio.create_task(_sample_rss())
     record = {"cold_cache": cold_cache, "repo": REPO, "ref": "main"}
     try:
         await runtime.register_model(
@@ -52,6 +71,7 @@ async def run(args):
         record["generated_tokens"] = result.generated_tokens
         record["prompt_tokens"] = result.prompt_tokens
 
+        record["max_rss_bytes"] = max_rss
         status = runtime.cache.status()
         network = runtime.telemetry.network
         record["cache_used_bytes"] = status.used_weight_bytes
@@ -80,6 +100,11 @@ async def run(args):
         record["error_details"] = getattr(exc, "details", {})
         record["ok"] = False
     finally:
+        rss_task.cancel()
+        try:
+            await rss_task
+        except (asyncio.CancelledError, Exception):
+            pass
         await runtime.close()
 
     artifact = Path(args.artifact)
