@@ -17,7 +17,6 @@ from typing import Any
 from ..errors import BackendCapabilityMissing
 from ..layout.model_map import ExpertPacking
 from .base import BackendCapabilities, GenerationResult, LoadContext
-from .transformers_backend import METADATA_FILES
 
 
 class GgufBackend:
@@ -71,42 +70,35 @@ class GgufBackend:
         tmpdir = Path(tempfile.mkdtemp(prefix=f"stream-agent-{context.alias}-", suffix="-gguf"))
         self._tmpdir = str(tmpdir)
 
-        # Metadata files.
-        for name in METADATA_FILES:
-            fsize = layout.metadata_files.get(name)
-            if fsize is None:
-                continue
-            try:
-                data = await context.provider.read_file(name, 0, fsize - 1)
-            except Exception:
-                continue
-            (tmpdir / name).write_bytes(data)
-
-        # GGUF repos often ship without config.json; fall back to the base model.
-        if not (tmpdir / "config.json").is_file():
-            fallback = Path("C:/Users/smily/.cache/huggingface/hub/models--HuggingFaceTB--SmolLM2-135M-Instruct/snapshots/12fd25f77366fa6b3b4b768ec3050bf629380bac/config.json")
-            if fallback.is_file():
-                (tmpdir / "config.json").write_bytes(fallback.read_bytes())
-
         # Whole gguf file into bounded cache.
         data = await context.provider.read_file(gguf_path_in_repo, 0, size - 1)
         gguf_basename = Path(gguf_path_in_repo).name
         (tmpdir / gguf_basename).write_bytes(data)
 
-        config = AutoConfig.from_pretrained(str(tmpdir), trust_remote_code=False)
+        _DTYPE_TO_TORCH = {
+            "float16": "float16",
+            "bfloat16": "bfloat16",
+            "float32": "float32",
+            "float64": "float64",
+        }
+        torch_dtype_name = _DTYPE_TO_TORCH.get(context.dtype)
+        torch_dtype = getattr(torch, torch_dtype_name, None) if torch_dtype_name else None
+
+        config = AutoConfig.from_pretrained(
+            str(tmpdir), gguf_file=gguf_basename, trust_remote_code=False
+        )
         tokenizer = None
         try:
-            tokenizer = AutoTokenizer.from_pretrained(str(tmpdir), trust_remote_code=False)
+            tokenizer = AutoTokenizer.from_pretrained(
+                str(tmpdir), gguf_file=gguf_basename, trust_remote_code=False
+            )
         except Exception:
-            try:
-                tokenizer = AutoTokenizer.from_pretrained("HuggingFaceTB/SmolLM2-135M-Instruct", trust_remote_code=False)
-            except Exception:
-                tokenizer = None
+            tokenizer = None
 
         model = AutoModelForCausalLM.from_pretrained(
             str(tmpdir),
             gguf_file=gguf_basename,
-            torch_dtype=getattr(torch, context.dtype.replace("float", "float"), None) if False else None,
+            torch_dtype=torch_dtype,
             device_map=None,
             trust_remote_code=False,
         )
@@ -128,13 +120,6 @@ class GgufBackend:
     async def unload(self) -> None:
         handle = self._handle
         self._handle = None
-        if handle is not None:
-            model = handle.get("model")
-            if model is not None:
-                try:
-                    model.to("meta" if False else "cpu")
-                except Exception:
-                    pass
         if self._tmpdir:
             shutil.rmtree(self._tmpdir, ignore_errors=True)
             self._tmpdir = None

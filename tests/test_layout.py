@@ -113,3 +113,41 @@ def test_gguf_metadata_is_parsed():
     assert metadata.metadata["general.alignment"] == 32
     assert metadata.tensors[0].name == "blk.0.weight"
     assert metadata.tensors[0].dims == (4,)
+import struct
+
+
+def gguf_string(value: str) -> bytes:
+    raw = value.encode("utf-8")
+    return struct.pack("<Q", len(raw)) + raw
+
+
+def make_gguf() -> bytes:
+    payload = b"GGUF"
+    payload += struct.pack("<I", 3)  # version
+    payload += struct.pack("<Q", 1)  # tensor count
+    payload += struct.pack("<Q", 1)  # kv count
+    payload += gguf_string("general.alignment")
+    payload += struct.pack("<I", 4)  # uint32
+    payload += struct.pack("<I", 32)
+    payload += gguf_string("w")
+    payload += struct.pack("<I", 1)  # dims
+    payload += struct.pack("<Q", 4)
+    payload += struct.pack("<I", 0)  # F32
+    payload += struct.pack("<Q", 0)  # offset
+    data_offset = (len(payload) + 31) // 32 * 32
+    payload += b"\x00" * (data_offset - len(payload))
+    payload += b"\x00" * 16
+    return payload
+
+
+async def test_gguf_layout_reports_tensor_byte_ranges():
+    from stream_agent.sources.local import MemorySource
+
+    source = MemorySource()
+    payload = make_gguf()
+    source.add_revision("gguf/fixture", "rev", {"model.gguf": payload})
+    revision = await source.resolve_revision("gguf/fixture", "rev")
+    layout = await build_layout(source, revision, artifact_format="gguf")
+    ref = layout.tensor("w")
+    assert ref.data_end - ref.data_start == 16
+    assert layout.shard_of("w") == "model.gguf"
