@@ -1,0 +1,23 @@
+{
+  "repo": "tiny-random/qwen3.5-moe",
+  "total_expert_tensor_count": 1920,
+  "total_expert_bytes": 983040,
+  "selected_expert_tensor_count": 24,
+  "dense_fetch": {
+    "path": "dense",
+    "tensor_count": 1920,
+    "transferred_bytes": 983040,
+    "cache_used_bytes": 1145240,
+    "max_rss_bytes": 55328768
+  },
+  "selective_fetch": {
+    "path": "selected",
+    "tensor_count": 24,
+    "transferred_bytes": 12288,
+    "cache_used_bytes": 262144,
+    "max_rss_bytes": 55664640,
+    "selected_expert_bytes": 12288,
+    "total_expert_bytes": 983040,
+    "expert_byte_reduction_ratio": 0.0125
+  }
+}
