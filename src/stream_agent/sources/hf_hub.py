@@ -207,7 +207,13 @@ class HuggingFaceSource:
         expected = end - start + 1
         try:
             async with self._sem:
-                response = await client.get(url, headers=headers)
+                request = client.build_request("GET", url, headers=headers)
+                # ``stream=True`` is essential: a server that ignores the
+                # Range header answers with a 200 and would otherwise make
+                # httpx buffer the complete model shard before we can inspect
+                # the status.  We must be able to refuse the response without
+                # reading (or paying for) its body.
+                response = await client.send(request, stream=True)
         except httpx.TimeoutException as exc:
             if attempt < self.config.retry_limit:
                 self._telemetry("retry", {"reason": "timeout", "path": path})
@@ -228,6 +234,10 @@ class HuggingFaceSource:
         status = response.status_code
         if status >= 400:
             error = self._map_status(response, path)
+            retry_after = response.headers.get("retry-after")
+            await response.aclose()
+            if isinstance(error, SourceRateLimitedError):
+                error.details["retry_after"] = retry_after
             if isinstance(error, SourceUnavailableError) and attempt < self.config.retry_limit:
                 self._telemetry("retry", {"reason": f"http_{status}", "path": path})
                 await self._backoff(attempt)
@@ -237,9 +247,11 @@ class HuggingFaceSource:
             raise error
 
         if status == 200:
-            # The source ignored the Range header and is sending the whole
-            # object.  This is exactly the "silent full download" case the
-            # design forbids, so the body is discarded and the error raised.
+            # The source ignored the Range header and started sending the
+            # whole object.  Close the stream without consuming the body: the
+            # design forbids a silent full download, not merely a discarded
+            # buffer.
+            await response.aclose()
             self._telemetry("full_object", {"repo": repo, "path": path})
             raise RangeUnsupportedError(
                 f"source ignored the Range header for {path}; partial access is unavailable",
@@ -247,32 +259,51 @@ class HuggingFaceSource:
             )
 
         if status != 206:
+            await response.aclose()
             raise RangeMismatchError(
                 f"unexpected HTTP {status} for range request on {path}",
                 details={"path": path, "status": status},
             )
 
         content_range = response.headers.get("content-range")
-        if content_range:
-            try:
-                rng = content_range.split(" ", 1)[1]
-                got_start, got_end = rng.split("/", 1)[0].split("-", 1)
-                if int(got_start) != start or int(got_end) != end:
-                    raise RangeMismatchError(
-                        f"source returned the wrong byte range for {path}",
-                        details={
-                            "requested": [start, end],
-                            "returned": [int(got_start), int(got_end)],
-                            "content_range": content_range,
-                        },
-                    )
-            except ValueError as exc:
+        if content_range is None:
+            await response.aclose()
+            raise RangeMismatchError(
+                f"206 response for {path} has no Content-Range header",
+                details={"path": path, "status": status},
+            )
+        try:
+            rng = content_range.split(" ", 1)[1]
+            got_start, got_end = rng.split("/", 1)[0].split("-", 1)
+            if int(got_start) != start or int(got_end) != end:
+                await response.aclose()
                 raise RangeMismatchError(
-                    f"unparsable Content-Range for {path}: {content_range!r}",
-                    details={"content_range": content_range},
-                ) from exc
+                    f"source returned the wrong byte range for {path}",
+                    details={
+                        "requested": [start, end],
+                        "returned": [int(got_start), int(got_end)],
+                        "content_range": content_range,
+                    },
+                )
+        except ValueError as exc:
+            await response.aclose()
+            raise RangeMismatchError(
+                f"unparsable Content-Range for {path}: {content_range!r}",
+                details={"content_range": content_range},
+            ) from exc
 
-        body = response.content
+        try:
+            body = await response.aread()
+        except httpx.HTTPError as exc:
+            await response.aclose()
+            if attempt < self.config.retry_limit:
+                self._telemetry("retry", {"reason": "read", "path": path})
+                await self._backoff(attempt)
+                return await self._request_range(
+                    repo, commit, path, start, end, attempt=attempt + 1
+                )
+            raise SourceUnavailableError(f"failed to read {path}[{start}:{end}]: {exc}") from exc
+        await response.aclose()
         if len(body) != expected:
             raise RangeMismatchError(
                 f"source returned {len(body)} bytes for a {expected} byte range of {path}",

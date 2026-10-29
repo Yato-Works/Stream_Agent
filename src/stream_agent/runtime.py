@@ -11,7 +11,7 @@ import asyncio
 import json
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -31,10 +31,40 @@ from .sources.hf_hub import HuggingFaceSource
 from .telemetry import RunTelemetry
 
 
+def apply_stop_sequences(
+    result: GenerationResult, stop: Any
+) -> GenerationResult:
+    """Truncate generated text at the earliest caller supplied stop sequence.
+
+    The backends generate the whole completion in one call, so a stop string
+    cannot save compute.  It is still honoured in the returned text: silently
+    ignoring a documented request field is worse than an imperfect stop.
+    ``generated_tokens`` keeps reporting what was actually generated.
+    """
+    if not stop:
+        return result
+    if isinstance(stop, str):
+        stops = [stop]
+    else:
+        try:
+            stops = [str(item) for item in stop if item]
+        except TypeError:
+            return result
+    if not stops:
+        return result
+    cut = len(result.text)
+    for marker in stops:
+        index = result.text.find(marker)
+        if index != -1:
+            cut = min(cut, index)
+    if cut >= len(result.text):
+        return result
+    return replace(result, text=result.text[:cut], finish_reason="stop")
+
+
 @dataclass
 class ModelSession:
     """An open model: pinned revision, layout, provider and backend."""
-
     alias: str
     repo: str
     revision: str
@@ -53,7 +83,9 @@ class ModelSession:
             await self.backend.unload()
 
     async def generate(self, prompt: str, **params: Any) -> GenerationResult:
-        return await self.backend.generate(self.handle, prompt, **params)
+        stop = params.pop("stop", None)
+        result = await self.backend.generate(self.handle, prompt, **params)
+        return apply_stop_sequences(result, stop)
 
     def describe(self) -> dict[str, Any]:
         return {

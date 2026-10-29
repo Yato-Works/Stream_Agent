@@ -150,10 +150,10 @@ class RemoteWeightProvider:
         return blocks
 
     async def _fetch_block(self, repo: str, commit: str, path: str, start: int, end: int) -> bytes:
-        data = await self.source.fetch_range(repo, commit, path, start, end)
-        if self.telemetry is not None:
-            self.telemetry.network.range_requests += 1
-        return data
+        # The source adapter owns the range-request counter: it emits one
+        # ``range_ok`` event per validated 206 response.  Incrementing here as
+        # well would double-count every transfer in the report.
+        return await self.source.fetch_range(repo, commit, path, start, end)
 
     async def _read_range(
         self,
@@ -224,22 +224,41 @@ class RemoteWeightProvider:
         ref = self.layout.tensor(key.tensor)
         start, end = ref.byte_range_for_elements(key.start, key.end)
         data = await self._read_range(ref.shard, start, end - 1)
-        return TensorBuffer(data=data, dtype=ref.dtype, shape=ref.shape, shard=ref.shard)
+        # A flattened element window has no meaningful multi-dimensional shape;
+        # reporting the full tensor shape here would make callers believe they
+        # received every element.
+        return TensorBuffer(
+            data=data,
+            dtype=ref.dtype,
+            shape=(key.end - key.start,),
+            shard=ref.shard,
+        )
 
     async def read_expert(self, key: ExpertKey) -> TensorBuffer:
         ref = self.layout.tensor(key.tensor)
         dim, index, count = self.layout.expert_element_range(key.tensor, key.expert_id)
         start, end = ref.byte_range_for_dim_slice(dim, index, count)
         data = await self._read_range(ref.shard, start, end - 1)
-        return TensorBuffer(data=data, dtype=ref.dtype, shape=ref.shape, shard=ref.shard)
+        shape = list(ref.shape)
+        shape[dim] = count
+        return TensorBuffer(
+            data=data,
+            dtype=ref.dtype,
+            shape=tuple(shape),
+            shard=ref.shard,
+        )
 
     async def read_file(self, path: str, start: int, end: int) -> bytes:
         """Read a raw byte range of a repository file.
 
-        Metadata files (config, tokenizer, shard index) are kept in their own
-        store so that they are not confused with the weight payload budget
+        Weight shards (including a whole GGUF file) always go through the
+        bounded weight cache: they are payload, not metadata, and must be
+        charged against the weight budget.  Only small metadata files
+        (config, tokenizer, shard index) use the separate metadata store
         (Plan.md section 8.4).
         """
+        if path in self.layout.shards:
+            return await self._read_range(path, start, end)
         if self.metadata_root is not None:
             target = self.metadata_root / self.layout.commit / path.replace("/", "__")
             if target.is_file():
@@ -252,8 +271,9 @@ class RemoteWeightProvider:
             payload = await self.source.fetch_range(
                 self.layout.repo, self.layout.commit, path, 0, size - 1
             )
+            # The source adapter already counts validated range responses; do
+            # not increment the same counter here.
             if self.telemetry is not None:
-                self.telemetry.network.range_requests += 1
                 self.telemetry.record_download(len(payload), kind="metadata")
             try:
                 target.parent.mkdir(parents=True, exist_ok=True)

@@ -81,6 +81,20 @@ async def test_identical_content_is_stored_once(two_models, runtime):
     assert runtime.cache.model_used_bytes("b") > 0
 
 
+async def test_cache_hit_adds_the_reading_model_reference(two_models, runtime):
+    first = await build_layout(two_models, await two_models.resolve_revision(REPO, COMMIT))
+    provider_a = await provider_for(two_models, first, runtime.cache, "a")
+    provider_b = await provider_for(two_models, first, runtime.cache, "b")
+    await provider_a.read_tensor(TensorKey(tensor="model.embed_tokens.weight"))
+    assert runtime.cache.model_used_bytes("b") == 0
+
+    await provider_b.read_tensor(TensorKey(tensor="model.embed_tokens.weight"))
+    # Every reused block must now be attributed to b as well; otherwise b can
+    # read a shared cache for free and its quota is never enforced.
+    assert runtime.cache.model_used_bytes("b") > 0
+    assert all("b" in entry.refs for entry in runtime.cache._entries.values())
+
+
 async def test_fixed_quota_blocks_a_model_that_is_too_large(two_models, runtime):
     first = await build_layout(two_models, await two_models.resolve_revision(REPO, COMMIT))
     # The quota is smaller than one indivisible cache block.

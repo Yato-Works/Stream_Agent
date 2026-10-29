@@ -107,6 +107,20 @@ class ModelController:
             "max_concurrent_requests": self.max_concurrent_requests,
         }
 
+    def supports_streaming(self) -> bool:
+        """Whether the configured backend can emit tokens incrementally."""
+        if self._session is not None:
+            capabilities = getattr(self._session.backend, "capabilities", None)
+            return bool(getattr(capabilities, "supports_streaming", False))
+        try:
+            from .backend.registry import create_backend
+
+            record = self.runtime.catalog.registered(self.model_alias) if self.runtime.catalog else {}
+            backend = create_backend(str(record.get("backend") or "fixture"))
+            return bool(getattr(backend.capabilities, "supports_streaming", False))
+        except Exception:
+            return False
+
 
 def _error_payload(exc: StreamAgentError) -> dict[str, Any]:
     return {"error": exc.to_dict()}
@@ -157,7 +171,7 @@ def build_app(runtime: StreamAgentRuntime, controller: ModelController):
             "capabilities": {
                 "backends": available_backends(),
                 "max_concurrent_requests": controller.max_concurrent_requests,
-                "streaming": "token" if _supports_streaming(controller) else "unsupported",
+                "streaming": "token" if controller.supports_streaming() else "unsupported",
                 "fields": [
                     "model",
                     "messages",
@@ -165,8 +179,8 @@ def build_app(runtime: StreamAgentRuntime, controller: ModelController):
                     "temperature",
                     "top_p",
                     "stop",
-                    "stream",
-                ],
+                ]
+                + (["stream"] if controller.supports_streaming() else []),
             },
         }
 
@@ -212,7 +226,7 @@ def build_app(runtime: StreamAgentRuntime, controller: ModelController):
         }
         stream = bool(payload.get("stream"))
 
-        if stream and not _supports_streaming(controller):
+        if stream and not controller.supports_streaming():
             return JSONResponse(
                 status_code=400,
                 content=_error_payload(
@@ -334,11 +348,8 @@ def build_app(runtime: StreamAgentRuntime, controller: ModelController):
 
 
 def _supports_streaming(controller: ModelController) -> bool:
-    session = controller._session
-    if session is None:
-        return False
-    capabilities = getattr(session.backend, "capabilities", None)
-    return bool(getattr(capabilities, "supports_streaming", False))
+    """Deprecated shim kept for callers of the old helper."""
+    return controller.supports_streaming()
 
 
 async def _stream_chunks(completion_id: str, model: str, text: str):

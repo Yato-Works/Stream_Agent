@@ -17,6 +17,7 @@ from stream_agent.errors import (
     SourceUnavailableError,
 )
 from stream_agent.sources.hf_hub import HuggingFaceSource
+from stream_agent.sources.local import LocalDirectorySource
 
 
 def _client(handler) -> httpx.AsyncClient:
@@ -36,6 +37,44 @@ async def test_range_request_requires_206():
     with pytest.raises(RangeUnsupportedError) as excinfo:
         await source.fetch_range("a/b", "commit", "model.safetensors", 0, 10)
     assert excinfo.value.code == ErrorCode.RANGE_UNSUPPORTED
+
+
+async def test_full_object_body_is_never_consumed():
+    """A 200 response must be refused before its body is read.
+
+    This is stronger than checking the error type: an implementation that
+    calls ``response.content`` has already paid for the complete shard.
+    """
+
+    class TrackingStream(httpx.AsyncByteStream):
+        def __init__(self) -> None:
+            self.read = False
+
+        async def __aiter__(self):
+            self.read = True
+            yield b"x" * 4096
+
+        async def aclose(self) -> None:
+            return None
+
+    stream = TrackingStream()
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, stream=stream)
+
+    source = HuggingFaceSource(SourceConfig(), client=_client(handler))
+    with pytest.raises(RangeUnsupportedError):
+        await source.fetch_range("a/b", "commit", "model.safetensors", 0, 10)
+    assert stream.read is False, "the full-object body was consumed"
+
+
+async def test_missing_content_range_is_rejected():
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(206, content=b"0" * 11)
+
+    source = HuggingFaceSource(SourceConfig(), client=_client(handler))
+    with pytest.raises(RangeMismatchError):
+        await source.fetch_range("a/b", "commit", "model.safetensors", 0, 10)
 
 
 async def test_wrong_content_range_is_rejected():
@@ -156,3 +195,36 @@ async def test_a_transient_server_error_is_retried():
     data = await source.fetch_range("a/b", "commit", "model.safetensors", 0, 10)
     assert data == b"0" * 11
     assert calls["count"] == 2
+
+
+async def test_rate_limit_is_not_retried_but_retry_after_is_reported():
+    calls = {"count": 0}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        calls["count"] += 1
+        return httpx.Response(429, content=b"slow down", headers={"Retry-After": "1"})
+
+    source = HuggingFaceSource(SourceConfig(retry_limit=2), client=_client(handler))
+    with pytest.raises(SourceRateLimitedError) as excinfo:
+        await source.fetch_range("a/b", "commit", "model.safetensors", 0, 10)
+    assert calls["count"] == 1
+    assert excinfo.value.details.get("retry_after") == "1"
+
+
+async def test_local_directory_source_reads_only_the_requested_window(tmp_path):
+    source = LocalDirectorySource(tmp_path)
+    target = tmp_path / "owner" / "repo" / "rev" / "model.safetensors"
+    target.parent.mkdir(parents=True)
+    target.write_bytes(b"0123456789abcdef")
+
+    data = await source.fetch_range("owner/repo", "rev", "model.safetensors", 4, 9)
+    assert data == b"456789"
+
+    with pytest.raises(RangeMismatchError):
+        await source.fetch_range("owner/repo", "rev", "model.safetensors", 4, 99)
+
+
+async def test_local_directory_source_forbids_path_traversal(tmp_path):
+    source = LocalDirectorySource(tmp_path)
+    with pytest.raises(SourceForbiddenError):
+        await source.fetch_range("owner/repo", "rev", "../../outside", 0, 1)

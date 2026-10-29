@@ -21,35 +21,62 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 
 GGUF_MAGIC = b"GGUF"
 
-#: ggml tensor type identifiers and their element sizes in bytes.
+#: ggml tensor types: id -> (name, bytes per block, elements per block).
+#:
+#: The block element count matters as much as the block size.  An earlier
+#: revision of this table shifted the entries after ``IQ3_S`` (types 22+),
+#: which produced plausible-looking but completely wrong byte ranges for
+#: quantized checkpoints.  Unknown ids are rejected instead of being treated
+#: as raw bytes.
+GGML_TYPES: dict[int, tuple[str, int, int]] = {
+    0: ("F32", 4, 1),
+    1: ("F16", 2, 1),
+    2: ("Q4_0", 18, 32),
+    3: ("Q4_1", 20, 32),
+    6: ("Q5_0", 22, 32),
+    7: ("Q5_1", 24, 32),
+    8: ("Q8_0", 34, 32),
+    9: ("Q8_1", 36, 32),
+    10: ("Q2_K", 84, 256),
+    11: ("Q3_K", 110, 256),
+    12: ("Q4_K", 144, 256),
+    13: ("Q5_K", 176, 256),
+    14: ("Q6_K", 210, 256),
+    15: ("Q8_K", 292, 256),
+    16: ("IQ2_XXS", 66, 256),
+    17: ("IQ2_XS", 74, 256),
+    18: ("IQ3_XXS", 98, 256),
+    19: ("IQ1_S", 50, 256),
+    20: ("IQ4_NL", 18, 32),
+    21: ("IQ3_S", 110, 256),
+    22: ("IQ2_S", 82, 256),
+    23: ("IQ4_XS", 136, 256),
+    24: ("I8", 1, 1),
+    25: ("I16", 2, 1),
+    26: ("I32", 4, 1),
+    27: ("I64", 8, 1),
+    28: ("F64", 8, 1),
+    29: ("IQ1_M", 56, 256),
+    30: ("BF16", 2, 1),
+    31: ("Q4_0_4_4", 18, 32),
+    32: ("Q4_0_4_8", 18, 32),
+    33: ("Q4_0_8_8", 18, 32),
+    34: ("TQ1_0", 54, 256),
+    35: ("TQ2_0", 66, 256),
+    36: ("IQ4_NL_4_4", 18, 32),
+    37: ("IQ4_NL_4_8", 18, 32),
+    38: ("IQ4_NL_8_8", 18, 32),
+    39: ("MXFP4", 17, 32),
+}
+
+#: Backwards compatible view: ggml type id -> bytes per block.
 GGML_TYPE_SIZES: dict[int, int] = {
-    0: 4,   # F32
-    1: 2,   # F16
-    2: 28,  # Q4_0 (block of 32)
-    3: 32,  # Q4_1 (block of 32)
-    6: 20,  # Q5_0 (block of 32)
-    7: 24,  # Q5_1 (block of 32)
-    8: 34,  # Q8_0 (block of 32)
-    9: 36,  # Q8_1 (block of 32)
-    10: 84, # Q2_K (block of 256)
-    11: 110, # Q3_K
-    12: 144, # Q4_K
-    13: 176, # Q5_K
-    14: 210, # Q6_K
-    15: 292, # Q8_K
-    16: 66, # IQ2_XXS
-    17: 74, # IQ2_XS
-    18: 98, # IQ3_XXS
-    19: 50, # IQ1_S
-    20: 110, # IQ4_NL
-    21: 82, # IQ3_S
-    22: 136, # I8
-    23: 52, # I16
-    24: 56, # I32
-    25: 64, # I64
-    26: 78, # F64
-    27: 96, # IQ1_M
-    28: 74, # BF16
+    type_id: block_bytes for type_id, (_, block_bytes, _) in GGML_TYPES.items()
+}
+
+#: Backwards compatible view: ggml type id -> elements per block.
+GGML_BLOCK_ELEMENTS: dict[int, int] = {
+    type_id: elements for type_id, (_, _, elements) in GGML_TYPES.items()
 }
 
 GGUF_TYPE_SIZES: dict[int, int] = {
@@ -232,34 +259,37 @@ async def build_gguf_layout(
         layout.tensor_shard[tensor.name] = path
     # Populate per-tensor byte ranges (Level 2 foundation).
     from .safetensors import TensorRef
-    _BLOCK_ELEMS = {
-        # quantized types use 32 or 256 element blocks
-    }
+
     for t in metadata.tensors:
+        spec = GGML_TYPES.get(t.ggml_type)
+        if spec is None:
+            raise ModelFormatUnsupported(
+                f"GGUF tensor {t.name!r} uses unknown ggml type {t.ggml_type}; "
+                "refusing to guess its byte range",
+                details={"tensor": t.name, "ggml_type": t.ggml_type},
+            )
+        type_name, block_bytes, block_elems = spec
         numel = t.element_count
-        ggtype = t.ggml_type
-        # block size in bytes from GGML_TYPE_SIZES (may be per 32/256)
-        block_bytes = GGML_TYPE_SIZES.get(ggtype, 0)
-        if ggtype in (10, 11, 12, 13, 14, 15):
-            block_elems = 256
-        elif ggtype in (0, 1, 22, 23, 24, 25, 26, 28):
-            block_elems = 1
-        else:
-            block_elems = 32
         if block_elems == 1:
             nbytes = numel * block_bytes
+        elif numel % block_elems:
+            raise ModelFormatUnsupported(
+                f"GGUF tensor {t.name!r} has {numel} elements, which is not a "
+                f"multiple of the {block_elems}-element block size of {type_name}",
+                details={"tensor": t.name, "elements": numel, "block": block_elems},
+            )
         else:
             nbytes = (numel // block_elems) * block_bytes
-            if numel % block_elems:
-                nbytes += block_bytes
         start = metadata.data_offset + t.offset
         end = start + nbytes
         if end > size:
-            end = size
-        dtype_label = {0:"F32",1:"F16",26:"F64",28:"BF16",22:"I8",23:"I16",24:"I32",25:"I64"}.get(ggtype, "U8")
+            raise ModelFormatUnsupported(
+                f"GGUF tensor {t.name!r} extends past the end of the file",
+                details={"tensor": t.name, "end": end, "file_size": size},
+            )
         layout.tensors[t.name] = TensorRef(
             name=t.name,
-            dtype=dtype_label,
+            dtype=type_name,
             shape=tuple(reversed(t.dims)) if t.dims else (),
             shard=path,
             data_start=start,
@@ -288,7 +318,9 @@ def _gguf_shard(path: str, size: int, metadata: GGUFMetadata):
 __all__ = [
     "GGUFTensorInfo",
     "GGUFMetadata",
+    "GGML_BLOCK_ELEMENTS",
     "GGML_TYPE_SIZES",
+    "GGML_TYPES",
     "parse_gguf_metadata",
     "build_gguf_layout",
 ]

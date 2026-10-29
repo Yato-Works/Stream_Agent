@@ -36,11 +36,15 @@ class LocalDirectorySource:
         return self.root.joinpath(*repo.split("/"))
 
     def _file_path(self, repo: str, commit: str, path: str) -> Path:
-        base = self._repo_dir(repo) / commit
+        base = (self._repo_dir(repo) / commit).resolve()
         candidate = (base / path).resolve()
         # Path traversal guard: a repository path may never escape the repo dir.
-        if not str(candidate).startswith(str(base.resolve())):
-            raise SourceForbiddenError(f"repository path escapes the managed root: {path!r}")
+        try:
+            candidate.relative_to(base)
+        except ValueError:
+            raise SourceForbiddenError(
+                f"repository path escapes the managed root: {path!r}"
+            ) from None
         return candidate
 
     async def resolve_revision(self, repo: str, ref: str = "main") -> RevisionInfo:
@@ -71,13 +75,22 @@ class LocalDirectorySource:
         target = self._file_path(repo, commit, path)
         if not target.is_file():
             raise SourceNotFoundError(f"{path} not found in {repo}@{commit}")
-        data = await asyncio.to_thread(target.read_bytes)
-        if end >= len(data):
-            raise RangeMismatchError(
-                f"range [{start}, {end}] exceeds file size {len(data)} for {path}",
-                details={"size": len(data)},
-            )
-        return data[start : end + 1]
+
+        def read_window() -> bytes:
+            size = target.stat().st_size
+            if end >= size:
+                raise RangeMismatchError(
+                    f"range [{start}, {end}] exceeds file size {size} for {path}",
+                    details={"size": size},
+                )
+            with target.open("rb") as handle:
+                # Seek to the requested window.  Reading the complete file
+                # first would make the local baseline O(file size) per block
+                # and would defeat the whole point of range access.
+                handle.seek(start)
+                return handle.read(end - start + 1)
+
+        return await asyncio.to_thread(read_window)
 
     async def probe_range_support(
         self,

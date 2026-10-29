@@ -151,3 +151,66 @@ async def test_gguf_layout_reports_tensor_byte_ranges():
     ref = layout.tensor("w")
     assert ref.data_end - ref.data_start == 16
     assert layout.shard_of("w") == "model.gguf"
+
+
+def make_gguf_tensors(tensors: list[tuple[str, tuple[int, ...], int, int]]) -> bytes:
+    """Build a GGUF file for ``(name, dims, ggml_type, payload_bytes)`` rows."""
+    payload = b"GGUF"
+    payload += struct.pack("<I", 3)
+    payload += struct.pack("<Q", len(tensors))
+    payload += struct.pack("<Q", 0)  # no metadata
+    offset = 0
+    for name, dims, ggml_type, nbytes in tensors:
+        payload += gguf_string(name)
+        payload += struct.pack("<I", len(dims))
+        for dim in dims:
+            payload += struct.pack("<Q", dim)
+        payload += struct.pack("<I", ggml_type)
+        payload += struct.pack("<Q", offset)
+        offset += nbytes
+    data_offset = (len(payload) + 31) // 32 * 32
+    payload += b"\x00" * (data_offset - len(payload))
+    payload += b"\xff" * offset
+    return payload
+
+
+async def _layout_for_gguf(payload: bytes):
+    from stream_agent.sources.local import MemorySource
+
+    source = MemorySource()
+    source.add_revision("gguf/multi", "rev", {"model.gguf": payload})
+    revision = await source.resolve_revision("gguf/multi", "rev")
+    return await build_layout(source, revision, artifact_format="gguf")
+
+
+async def test_gguf_quantized_byte_ranges_use_the_real_block_layout():
+    payload = make_gguf_tensors(
+        [
+            ("q4", (32,), 2, 18),      # Q4_0: 32 elements per 18 byte block
+            ("q8", (32,), 8, 34),      # Q8_0: 32 elements per 34 byte block
+            ("q4k", (256,), 12, 144),  # Q4_K: 256 elements per 144 byte block
+            ("bf16", (4,), 30, 8),     # BF16: 2 bytes per element
+            ("f64", (2,), 28, 16),     # F64: 8 bytes per element
+        ]
+    )
+    layout = await _layout_for_gguf(payload)
+    expected = {"q4": 18, "q8": 34, "q4k": 144, "bf16": 8, "f64": 16}
+    for name, nbytes in expected.items():
+        ref = layout.tensor(name)
+        assert ref.nbytes == nbytes, name
+        assert ref.data_end <= len(payload)
+    assert layout.tensor("q4").dtype == "Q4_0"
+    assert layout.tensor("bf16").dtype == "BF16"
+    assert layout.tensor("f64").dtype == "F64"
+
+
+async def test_gguf_unknown_type_is_rejected_instead_of_guessed():
+    payload = make_gguf_tensors([("mystery", (32,), 250, 32)])
+    with pytest.raises(ModelFormatUnsupported):
+        await _layout_for_gguf(payload)
+
+
+async def test_gguf_block_size_mismatch_is_rejected():
+    payload = make_gguf_tensors([("broken", (33,), 2, 18)])
+    with pytest.raises(ModelFormatUnsupported):
+        await _layout_for_gguf(payload)

@@ -50,6 +50,33 @@ def test_quota_sum_may_not_exceed_the_global_limit():
         validate_config(config)
 
 
+def test_fixed_quotas_are_validated_even_under_a_shared_default_policy():
+    config = Config(
+        storage=StorageConfig(
+            root=Path("x"),
+            weight_cache_limit_bytes=10 * GIB,
+            managed_store_limit_bytes=None,
+            quota_policy="elastic",
+        ),
+        models={
+            "a": ModelConfig(
+                alias="a", repo="x/y", revision="abc",
+                weight_cache_quota_bytes=6 * GIB, quota_mode="fixed",
+            ),
+            "b": ModelConfig(
+                alias="b", repo="x/z", revision="abc",
+                weight_cache_quota_bytes=6 * GIB, quota_mode="fixed",
+            ),
+            "c": ModelConfig(
+                alias="c", repo="x/w", revision="abc",
+                weight_cache_quota_bytes=99 * GIB, quota_mode="elastic",
+            ),
+        },
+    )
+    with pytest.raises(ConfigInvalid):
+        validate_config(config)
+
+
 def test_weight_cache_limit_must_leave_room_inside_the_store_limit():
     config = Config(
         storage=StorageConfig(

@@ -71,7 +71,10 @@ class GenerationResult:
     text: str
     prompt_tokens: int = 0
     generated_tokens: int = 0
-    ttft_ms: float = 0.0
+    #: Time to the first generated token, or ``None`` when the backend produces
+    #: the whole completion in one blocking call and therefore cannot observe
+    #: it.  Reporting the total generation time here would fabricate a metric.
+    ttft_ms: float | None = None
     generation_ms: float = 0.0
     weight_wait_ms: float = 0.0
     finish_reason: str = "stop"

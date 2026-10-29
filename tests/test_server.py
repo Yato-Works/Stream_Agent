@@ -57,6 +57,11 @@ def test_models_endpoint_lists_registered_models(client):
     payload = response.json()
     assert payload["data"][0]["id"] == "tiny"
     assert "fields" in payload["capabilities"]
+    # The fixture backend does not emit tokens incrementally, so ``stream``
+    # must not be advertised.
+    assert payload["capabilities"]["streaming"] == "unsupported"
+    assert "stream" not in payload["capabilities"]["fields"]
+    assert "stop" in payload["capabilities"]["fields"]
 
 
 def test_chat_completion_returns_text(client):

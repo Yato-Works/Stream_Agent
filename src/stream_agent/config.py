@@ -146,18 +146,22 @@ def validate_config(config: Config) -> None:
                 "managed store limit does not leave enough headroom for the configured "
                 "metadata and staging reserves"
             )
-    if storage.quota_policy == "fixed":
-        total_fixed = sum(
-            m.weight_cache_quota_bytes for m in config.models.values() if m.quota_mode == "fixed"
+    # Fixed per-model quotas occupy the shared budget regardless of the
+    # *default* policy: a model that declares ``quota_mode = "fixed"`` must
+    # still fit even when new models default to a shared policy.
+    total_fixed = sum(
+        m.weight_cache_quota_bytes
+        for m in config.models.values()
+        if m.quota_mode == "fixed" and m.weight_cache_quota_bytes > 0
+    )
+    if total_fixed > storage.weight_cache_limit_bytes:
+        raise ConfigInvalid(
+            "sum of fixed per-model quotas exceeds the global weight cache limit",
+            details={
+                "quota_total_bytes": total_fixed,
+                "weight_cache_limit_bytes": storage.weight_cache_limit_bytes,
+            },
         )
-        if total_fixed > storage.weight_cache_limit_bytes:
-            raise ConfigInvalid(
-                "sum of fixed per-model quotas exceeds the global weight cache limit",
-                details={
-                    "quota_total_bytes": total_fixed,
-                    "weight_cache_limit_bytes": storage.weight_cache_limit_bytes,
-                },
-            )
 
 
 __all__ = [

@@ -33,6 +33,8 @@ from ..layout.model_map import ExpertPacking
 from ..provider import TensorKey
 from .base import BackendCapabilities, GenerationResult, LoadContext
 
+from .selective_experts import ExpertSpec, SelectiveExpertMaterializer
+
 METADATA_FILES = (
     "config.json",
     "generation_config.json",
@@ -154,6 +156,40 @@ class TransformersBackend:
                 materialize_mode=str(context.options.get("materialize", "lazy")),
                 loop=asyncio.get_running_loop(),
             )
+            # Wire selective-MoE configuration from options.  Each spec dict
+            # must have keys: tensor, dim, num_experts (proj is optional).
+            for spec_dict in context.options.get("expert_specs", []) or []:
+                materializer.register_expert_spec(
+                    ExpertSpec(
+                        tensor=spec_dict["tensor"],
+                        dim=int(spec_dict["dim"]),
+                        num_experts=int(spec_dict["num_experts"]),
+                        proj=spec_dict.get("proj", "unknown"),
+                    )
+                )
+            materializer.router_resolver = context.options.get("router_resolver")
+            selective_requested = bool(
+                context.options.get("experimental_selective_moe", False)
+            )
+            if selective_requested:
+                # Selective materialisation is opt-in because it can produce
+                # silently wrong output when the supplied router resolver does
+                # not reproduce the model's own top-k selection exactly.
+                if not materializer.expert_specs:
+                    raise BackendCapabilityMissing(
+                        "experimental_selective_moe requires at least one expert spec"
+                    )
+                if materializer.router_resolver is None:
+                    raise BackendCapabilityMissing(
+                        "experimental_selective_moe requires a router_resolver"
+                    )
+                warnings.warn(
+                    "experimental_selective_moe is enabled: unselected experts are "
+                    "zero-filled and the backend trusts the supplied router resolver",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+            materializer.selective_moe_enabled = selective_requested
             await materializer.prepare()
             if materializer.mode != "eager":
                 materializer.install_lazy_hooks()
@@ -252,7 +288,11 @@ class TransformersBackend:
             text=text,
             prompt_tokens=int(input_ids.shape[1]),
             generated_tokens=generated,
-            ttft_ms=total_ms if generated else 0.0,
+            # The backend calls ``model.generate`` as one blocking operation,
+            # so it cannot observe the first token.  Leaving TTFT unset is the
+            # honest answer; reporting ``total_ms`` would be total generation
+            # time under a different name.
+            ttft_ms=None,
             generation_ms=total_ms,
             weight_wait_ms=weight_wait_ms,
             finish_reason="length" if generated >= max_new_tokens else "stop",
@@ -355,6 +395,11 @@ class _Materializer:
         self._meta_params: dict[str, Any] = {}
         self._layer_names: set[str] = set()
         self._handles: list[Any] = []
+        # -- selective MoE ---------------------------------------------------
+        self.expert_specs: dict[str, ExpertSpec] = {}
+        self.router_resolver: Any | None = None
+        self.selective_moe_enabled = False
+        self._expert_full_tensors: dict[str, Any] = {}
 
     # -- helpers -----------------------------------------------------------
     def _resolve_name(self, name: str) -> str | None:
@@ -401,6 +446,136 @@ class _Materializer:
         """Install an already built parameter object under ``full_name``."""
         module, name = self._module_for(full_name)
         module._parameters[name] = parameter
+
+    # -- selective MoE ------------------------------------------------------
+    def register_expert_spec(self, spec: ExpertSpec) -> None:
+        """Declare how one architecture packs its experts.
+
+        The spec is also forwarded to the layout so that ``provider.read_expert``
+        can resolve the byte slice for each expert id.
+        """
+        self.expert_specs[spec.tensor] = spec
+        self.layout.register_expert_packing(
+            ExpertPacking(tensor=spec.tensor, dim=spec.dim, num_experts=spec.num_experts)
+        )
+
+    def _param_name_for_artifact(self, artifact_name: str) -> str | None:
+        """Find the model parameter name that resolves to ``artifact_name``."""
+        for full_name, _ in self.model.named_parameters(recurse=True, remove_duplicate=False):
+            if self._resolve_name(full_name) == artifact_name:
+                return full_name
+        return None
+
+    def _is_expert_layer(self, module: Any) -> bool:
+        """Return True if ``module`` contains expert parameters."""
+        for name, _ in module.named_parameters(recurse=True):
+            if "experts" in name:
+                return True
+        return False
+
+    def _expert_param_names(self, module: Any) -> list[str]:
+        """Return full names of expert parameters owned by ``module``."""
+        prefix = ""
+        for layer_prefix, layer in self._layer_modules():
+            if layer is module:
+                prefix = layer_prefix
+                break
+        return [
+            f"{prefix}{name}"
+            for name, _ in module.named_parameters(recurse=True)
+            if "experts" in name
+        ]
+
+    async def _materialize_expert_slices(
+        self, layer_module: Any, selected_experts: dict[str, tuple[int, ...]]
+    ) -> None:
+        """Fetch only the router-selected expert slices and install them.
+
+        ``selected_experts`` maps artifact tensor name -> selected expert ids.
+        The full expert parameter tensors are allocated once (zeros) and the
+        fetched slices are copied into the corresponding rows.
+        """
+        materializer = SelectiveExpertMaterializer(
+            provider=self.provider, layout=self.layout
+        )
+        for tensor, spec in self.expert_specs.items():
+            materializer.register_spec(spec)
+
+        result = await materializer.materialize(selected_experts)
+        if not result.selected:
+            return
+
+        torch = self.torch
+        source_dtype_map: dict[str, Any] = {}
+
+        for tensor_key, buffer in result.per_tensor.items():
+            tensor_name, expert_id_str = tensor_key.rsplit("::", 1)
+            expert_id = int(expert_id_str)
+            spec = self.expert_specs[tensor_name]
+
+            # Resolve the torch dtype once per artifact dtype.
+            if buffer.dtype not in source_dtype_map:
+                source_dtype_map[buffer.dtype] = self._torch_dtype(buffer.dtype)
+            source_dtype = source_dtype_map[buffer.dtype]
+
+            raw = torch.frombuffer(bytearray(buffer.data), dtype=torch.uint8)
+            view = raw.view(source_dtype)
+
+            # Target dtype cast (matches _materialize_names logic).
+            target_dtype = source_dtype
+            if (
+                self.dtype in ("float16", "bfloat16", "float32")
+                and buffer.dtype in ("F32", "F16", "BF16")
+                and self.dtype != _ARTIFACT_DTYPE_NAMES.get(buffer.dtype)
+            ):
+                target_dtype = getattr(torch, self.dtype)
+
+            # Full parameter shape and the exact per-expert window the provider
+            # used.  Deriving it from the declared packing keeps the copy
+            # destination in sync with the fetched byte slice.
+            ref = self.layout.tensor(spec.tensor)
+            full_shape = tuple(ref.shape)
+            packing = self.layout.expert_packing[spec.tensor]
+            _, _, per_expert_size = packing.slice_for(expert_id, full_shape)
+
+            param_full_name = self._param_name_for_artifact(tensor_name)
+            if param_full_name is None:
+                raise BackendCapabilityMissing(
+                    f"no model parameter resolves to artifact tensor {tensor_name!r}",
+                    details={"tensor": tensor_name},
+                )
+            module, name = self._module_for(param_full_name)
+            param = self._expert_full_tensors.get(tensor_name)
+            if param is None or module._parameters.get(name) is not param:
+                # Allocate (or re-allocate) the full expert parameter on the
+                # target device in the compute dtype.  Reusing a tensor that is
+                # no longer installed on the module would write into a detached
+                # object.
+                full_tensor = torch.zeros(
+                    full_shape, dtype=target_dtype, device=self.device
+                )
+                old = module._parameters.get(name)
+                requires_grad = bool(getattr(old, "requires_grad", False))
+                param = torch.nn.Parameter(full_tensor, requires_grad=requires_grad)
+                module._parameters[name] = param
+                self._expert_full_tensors[tensor_name] = param
+
+            # Reshape the fetched slice to the per-expert shape.
+            expert_shape = list(full_shape)
+            expert_shape[spec.dim] = per_expert_size
+            expert_tensor = view.reshape(tuple(expert_shape))
+
+            expert_tensor = expert_tensor.to(dtype=target_dtype).to(self.device)
+
+            # Copy the expert slice into the full parameter tensor.
+            with torch.no_grad():
+                slices = [slice(None)] * len(full_shape)
+                slices[spec.dim] = slice(
+                    expert_id * per_expert_size, (expert_id + 1) * per_expert_size
+                )
+                param.data[tuple(slices)] = expert_tensor
+
+            self.materialized_bytes += len(buffer.data)
 
     def _restore_meta(self, full_name: str) -> None:
         original = self._meta_params.get(full_name)
@@ -612,16 +787,65 @@ class _Materializer:
             handle.remove()
         self._handles.clear()
 
-    def _pre_hook(self, module: Any, args: Any):  # pragma: no cover - torch callback
-        names = self._names_of_module(module)
-        coro = self._materialize_names(names)
+    def _run_coro(self, coro: Any) -> None:
+        """Run a materialisation coroutine from a synchronous torch hook."""
         if self.loop is not None and self.loop.is_running():
             asyncio.run_coroutine_threadsafe(coro, self.loop).result()
         else:  # pragma: no cover - fallback for synchronous use
             asyncio.get_event_loop().run_until_complete(coro)
+
+    def _pre_hook(self, module: Any, args: Any):  # pragma: no cover - torch callback
+        names = self._names_of_module(module)
+        if not names:
+            return None
+        expert_names = [n for n in names if "experts" in n]
+        non_expert_names = [n for n in names if "experts" not in n]
+
+        # Materialise non-expert parameters of the layer normally.
+        if non_expert_names:
+            self._run_coro(self._materialize_names(non_expert_names))
+
+        if not expert_names:
+            return None
+
+        # Selective MoE is opt-in and requires an explicit router resolver.
+        # Every other combination falls back to the complete, correct expert
+        # bank instead of leaving unselected experts zero-filled.
+        if not self.selective_moe_enabled or self.router_resolver is None:
+            self._run_coro(self._materialize_names(expert_names))
+            return None
+
+        try:
+            hidden_states = args[0] if args else None
+            if hidden_states is None:
+                raise ValueError("the layer did not receive hidden states")
+            selected_ids = self.router_resolver(module, hidden_states)
+            selected = tuple(sorted({int(expert) for expert in selected_ids}))
+        except Exception:
+            # A resolver that cannot answer must not silently disable expert
+            # loading: fall back to the dense path for this pass.
+            self._run_coro(self._materialize_names(expert_names))
+            return None
+
+        if not selected:
+            self._run_coro(self._materialize_names(expert_names))
+            return None
+
+        selected_experts: dict[str, tuple[int, ...]] = {}
+        for expert_name in expert_names:
+            resolved = self._resolve_name(expert_name)
+            if resolved is not None:
+                selected_experts[resolved] = selected
+
+        self._run_coro(self._materialize_expert_slices(module, selected_experts))
         return None
 
     def _post_hook(self, module: Any, args: Any, output: Any):  # pragma: no cover
+        # The full expert tensors installed for this layer are about to be
+        # replaced by the original meta parameters.  Forget them: reusing a
+        # detached tensor on the next pass would leave the module on ``meta``
+        # and produce a hard failure (or silent zeros).
+        self._expert_full_tensors.clear()
         for name in self._names_of_module(module):
             self._restore_meta(name)
         return None

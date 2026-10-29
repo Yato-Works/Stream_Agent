@@ -79,12 +79,23 @@ class BenchResult:
 
 
 async def clear_cache(runtime: StreamAgentRuntime) -> None:
-    """Drop every cached block so the next run starts cold."""
+    """Drop every cached block so the next run starts cold.
+
+    The reset itself is not part of the measured run: its evictions are not
+    counted as churn and the refetch history is cleared so that a deliberate
+    cold start is not misreported as cache thrashing.
+    """
     if runtime.cache is None:
         return
-    for entry in list(runtime.cache._entries.values()):
-        await runtime.cache.evict_block(entry.block_key, reason="bench_reset")
+    telemetry = runtime.cache.telemetry
+    runtime.cache.telemetry = None
+    try:
+        for entry in list(runtime.cache._entries.values()):
+            await runtime.cache.evict_block(entry.block_key, reason="bench_reset")
+    finally:
+        runtime.cache.telemetry = telemetry
     runtime.cache._used_bytes = runtime.cache._compute_unique_bytes()
+    runtime.cache._evicted_content_hashes.clear()
 
 
 async def run_case(

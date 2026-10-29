@@ -49,13 +49,21 @@ class ExpertPacking:
 
     Backends declare this explicitly; the cache manager must never guess
     expert ids from file names (Plan.md C6).
+
+    ``rows_per_expert`` is normally ``1`` (one expert per index along ``dim``,
+    as in Qwen-style ``experts.gate_up_proj``).  Fused layouts that place
+    several rows per expert can declare it explicitly; when omitted it is
+    inferred from the tensor shape.
     """
 
     tensor: str
     dim: int
     num_experts: int
+    rows_per_expert: int | None = None
 
-    def slice_for(self, expert_id: int) -> tuple[int, int, int]:
+    def slice_for(
+        self, expert_id: int, shape: Sequence[int] | None = None
+    ) -> tuple[int, int, int]:
         """Return ``(dim, index, count)`` for an expert id."""
         if expert_id < 0 or expert_id >= self.num_experts:
             raise ModelFormatUnsupported(
@@ -63,7 +71,35 @@ class ExpertPacking:
                 f"(0..{self.num_experts - 1})",
                 details={"expert": expert_id, "num_experts": self.num_experts},
             )
-        return self.dim, expert_id, 1
+        rows = self.rows_per_expert
+        if rows is None:
+            if shape is None:
+                rows = 1
+            else:
+                if self.dim < 0 or self.dim >= len(shape):
+                    raise ModelFormatUnsupported(
+                        f"expert packing for {self.tensor!r} names dimension {self.dim}, "
+                        f"but the tensor has shape {tuple(shape)}",
+                        details={"tensor": self.tensor, "dim": self.dim},
+                    )
+                if shape[self.dim] % self.num_experts:
+                    raise ModelFormatUnsupported(
+                        f"dimension {self.dim} of {self.tensor!r} holds {shape[self.dim]} "
+                        f"rows, which is not divisible by {self.num_experts} experts",
+                        details={
+                            "tensor": self.tensor,
+                            "dim": self.dim,
+                            "shape": tuple(shape),
+                        },
+                    )
+                rows = shape[self.dim] // self.num_experts
+        if rows <= 0:
+            raise ModelFormatUnsupported(
+                f"expert packing for {self.tensor!r} has no rows per expert",
+                details={"tensor": self.tensor, "rows_per_expert": rows},
+            )
+        index = expert_id * rows
+        return self.dim, index, rows
 
 
 @dataclass
@@ -116,7 +152,7 @@ class ModelLayout:
                 f"no expert packing has been declared for tensor {tensor_name!r}",
                 details={"tensor": tensor_name},
             )
-        return packing.slice_for(expert_id)
+        return packing.slice_for(expert_id, self.tensor(tensor_name).shape)
 
     # -- accounting --------------------------------------------------------
     def summary(self) -> dict[str, Any]:

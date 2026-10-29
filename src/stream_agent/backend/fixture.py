@@ -29,7 +29,9 @@ class FixtureBackend:
         devices=("cpu",),
         access_granularity=("tensor", "tensor_slice"),
         min_working_memory_bytes=0,
-        supports_streaming=True,
+        # The fixture computes the whole completion in one call; it does not
+        # emit tokens incrementally, so claiming streaming would be false.
+        supports_streaming=False,
         notes="Deterministic backend used for tests and plumbing benchmarks.",
     )
 
@@ -72,7 +74,6 @@ class FixtureBackend:
             text=text,
             prompt_tokens=max(1, len(prompt.split())),
             generated_tokens=max_tokens,
-            ttft_ms=elapsed,
             generation_ms=elapsed,
             finish_reason="stop",
         )

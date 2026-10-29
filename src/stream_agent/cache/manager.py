@@ -358,6 +358,13 @@ class CacheManager(BudgetMixin):
                 self._hash_in_use[digest] = self._hash_in_use.get(digest, 0) + 1
                 try:
                     await self._touch(key)
+                    if request.model_alias and request.model_alias not in existing.refs:
+                        # A second model read this shared block.  Record the
+                        # reference so per-model attribution and quota
+                        # accounting include it; otherwise the block is
+                        # charged only to its creator.
+                        existing.refs.add(request.model_alias)
+                        await asyncio.to_thread(self.db.upsert_entry, existing)
                     if self.telemetry is not None:
                         self.telemetry.cache.hits += 1
                         self.telemetry.cache.reused_bytes += existing.size
