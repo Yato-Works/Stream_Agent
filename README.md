@@ -1,17 +1,22 @@
 # Stream Agent
 
-> **Run 1.5 TB Open-Weight AI (Kimi-K3, DeepSeek) on your consumer PC — using only 40 GB of local storage.**
+> **Explore 1.5 TB Open-Weight AI (Kimi-K3, DeepSeek) without 1.5 TB of disk.**
 >
-> *"Is it really open-source if you need a $10,000 server just to download it?"*
-> Stream Agent breaks the storage wall for massive models. By retrieving verified weights on demand via HTTP 206 Range requests into a strict, bounded cache quota, you can run and inspect frontier models on everyday hardware.
+> *"Is it really open-source if you need a $10,000 server just to download it?"*  
+> Stream Agent breaks the storage wall for massive frontier models. Instead of downloading whole multi-gigabyte shards, it retrieves only the verified weight ranges a backend requests (HTTP 206) into a strict, user-configurable local cache quota (e.g., 20–40 GB).
 
 ---
 
 ### Key Empirical Results (Measured, Not Projected)
 
-- **1.56 TB Kimi-K3 Expert Retrieval**: Mapped all 497,220 tensors across 96 shards in 67s without weight download. Fetched Layer 1 Expert 0 (5.25 MB) in **1.55 seconds** via direct HTTPS (100% byte integrity match).
-- **Cache Scaling (SmolLM2 2-Token Evaluation)**: Expanding cache from 128 MiB (constrained) to 512 MiB (adequate) reduced 2-token generation time from **120.58s to 68.36s (43.3% faster)** and eliminated **243.9 MB of redundant re-downloads (0 evictions, 0 refetched bytes)**.
-- **Prefetch Overlap**: Background layer prefetching overlapped weight retrieval during decoder passes, reducing single-token generation wall time from **71.57s to 60.98s** on cold CPU runs while strictly respecting the 128 MiB limit.
+- **1.56 TB Kimi-K3 Expert Retrieval**:
+  Mapped all 497,220 tensors across 96 shards in 67s without downloading weights. Directly fetched Layer 1 Expert 0 (5.25 MB) in **1.55 seconds** via direct HTTPS (100% byte integrity match). *(Full end-to-end generation is active development; remote tensor addressing is proven).*
+- **Cache Scaling on Multi-Token Run (SmolLM2-135M)**:
+  Expanding the cache from 128 MiB (constrained) to 512 MiB (adequate) reduced 2-token generation time from **120.58s to 68.36s (43.3% faster)** and completely eliminated **243.9 MB of redundant re-downloads (0 evictions, 0 refetched bytes)**.
+- **Prefetch Overlap (SmolLM2-135M, CPU)**:
+  Background layer prefetching (`--prefetch-layers`) overlapped weight retrieval during decoder passes, reducing single-token generation wall time from **71.57s to 60.98s** on cold runs while strictly respecting the 128 MiB cache limit.
+
+> **Hardware Context & Current Scope**: Verified on Windows 10, Intel CPU (16 cores), 16 GiB RAM, RTX 3050 (8 GiB VRAM). Memory bounds (RAM/VRAM) depend on the inference backend; Stream Agent strictly bounds the *disk weight footprint*. End-to-end token generation is currently verified on dense models (SmolLM2); full sparse MoE generation is the immediate next milestone.
 
 ---
 
@@ -28,7 +33,7 @@ The following is implemented and covered by the test-suite:
 | C3 | Model layout / weight map (safetensors; GGUF metadata + byte ranges) | implemented |
 | C4 | `WeightProvider` / block reader | implemented |
 | C5 | Global cache manager (budget, reservations, eviction, single-flight, crash recovery) | implemented |
-| C6 | Prefetch scheduler | library only — **not wired** into the request path |
+| C6 | Prefetch scheduler | implemented (opt-in via `--prefetch-layers` / `prefetch_layers: true`) |
 | C7 | Inference backend adapter | `transformers` (lazy + eager) and `fixture`; selective MoE is experimental |
 | C8 | Local model server / worker controller | implemented (loopback only) |
 | C9 | Telemetry and local report | implemented |
