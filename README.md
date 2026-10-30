@@ -2,8 +2,8 @@
 
 > **Explore 1.5 TB Open-Weight AI (Kimi-K3, DeepSeek) without 1.5 TB of disk.**
 >
-> *"Is it really open-source if you need a $10,000 server just to download it?"*  
-> Stream Agent breaks the storage wall for massive frontier models. Instead of downloading whole multi-gigabyte shards, it retrieves only the verified weight ranges a backend requests (HTTP 206) into a strict, user-configurable local cache quota (e.g., 20–40 GB).
+> *"Is it really open-source if you need a server-class machine just to download it?"*  
+> Stream Agent is designed to break the storage wall for massive models. Instead of downloading whole multi-gigabyte shards, it retrieves only the verified weight ranges a backend requests (HTTP 206) into a strict, user-configurable local cache quota.
 
 ---
 
@@ -12,7 +12,7 @@
 - **1.56 TB Kimi-K3 Expert Retrieval**:
   Mapped all 497,220 tensors across 96 shards in 67s without downloading weights. Directly fetched Layer 1 Expert 0 (5.25 MB) in **1.55 seconds** via direct HTTPS (100% byte integrity match). *(Full end-to-end generation is active development; remote tensor addressing is proven).*
 - **Cache Scaling on Multi-Token Run (SmolLM2-135M)**:
-  Expanding the cache from 128 MiB (constrained) to 512 MiB (adequate) reduced 2-token generation time from **120.58s to 68.36s (43.3% faster)** and completely eliminated **243.9 MB of redundant re-downloads (0 evictions, 0 refetched bytes)**.
+  Expanding the cache from 128 MiB (constrained) to 512 MiB (adequate) reduced 2-token generation time from **120.58s to 68.36s (43.3% faster)** and completely eliminated **243.9 MB of redundant re-downloads (0 evictions, 0 refetched bytes)**. *(This demonstrates cache-tradeoff scaling rather than interactive generation speeds).*
 - **Prefetch Overlap (SmolLM2-135M, CPU)**:
   Background layer prefetching (`--prefetch-layers`) overlapped weight retrieval during decoder passes, reducing single-token generation wall time from **71.57s to 60.98s** on cold runs while strictly respecting the 128 MiB cache limit.
 

@@ -34,6 +34,11 @@ class BackendCapabilities:
     supports_streaming: bool = False
     notes: str = ""
 
+    def supports(self, *, artifact_format: str, device: str) -> bool:
+        """Return whether this backend declares support for a format/device pair."""
+        device_type = device.split(":", maxsplit=1)[0]
+        return artifact_format in self.formats and device_type in self.devices
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "backend_id": self.backend_id,
@@ -64,6 +69,10 @@ class LoadContext:
     device: str = "cpu"
     dtype: str = "float32"
     options: dict[str, Any] = field(default_factory=dict)
+
+    def option(self, name: str, default: Any = None) -> Any:
+        """Read a backend-specific option without sharing mutable defaults."""
+        return self.options.get(name, default)
 
 
 @dataclass

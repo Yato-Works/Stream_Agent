@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -113,63 +113,67 @@ async def run_case(
         cache_budget_bytes=case.cache_budget_bytes,
         cold_or_warm="cold" if case.cold else "warm",
     )
-    original_limit = runtime.cache.storage.weight_cache_limit_bytes
-    original_block_size = runtime.storage.block_size_bytes
-    for index in range(case.runs):
-        telemetry = RunTelemetry(run_id=f"bench-{int(time.time()*1000)}-{index}")
-        runtime.telemetry = telemetry
-        runtime.cache.telemetry = telemetry
-        runtime.cache.run_id = telemetry.run_id
-        runtime.cache.set_weight_limit(case.cache_budget_bytes)
-        runtime.storage = runtime.storage.__class__(
-            **{**runtime.storage.__dict__, "weight_cache_limit_bytes": case.cache_budget_bytes}
-        )
-        if case.cold:
-            await clear_cache(runtime)
-        session = await runtime.open_session(
-            case.model, backend_id=backend, materialize=materialize, device=device
-        )
-        generation = await session.generate(case.prompt, max_tokens=case.max_tokens)
-        telemetry.inference.prompt_tokens = generation.prompt_tokens
-        telemetry.inference.generated_tokens = generation.generated_tokens
-        telemetry.inference.ttft_ms = generation.ttft_ms
-        telemetry.inference.generation_ms = generation.generation_ms
-        telemetry.inference.weight_wait_ms = generation.weight_wait_ms
-        telemetry.inference.load_weight_wait_ms = generation.load_weight_wait_ms
-        telemetry.inference.total_inference_ms = generation.generation_ms
-        telemetry.inference.status = "ok"
-        telemetry.model_alias = case.model
-        telemetry.repo = session.repo
-        telemetry.revision = session.revision
-        telemetry.artifact_format = session.layout.artifact_format
-        telemetry.backend_id = getattr(session.backend.capabilities, "backend_id", "")
-        telemetry.backend_version = getattr(session.backend.capabilities, "version", "")
-        telemetry.cold_or_warm = result.cold_or_warm
-        telemetry.storage.weight_cache_limit_bytes = case.cache_budget_bytes
-        telemetry.storage.managed_store_limit_bytes = runtime.storage.managed_store_limit_bytes
-        status = runtime.cache.status()
-        telemetry.storage.current_weight_bytes = status.used_weight_bytes
-        telemetry.storage.peak_weight_bytes = max(
-            telemetry.storage.peak_weight_bytes, status.used_weight_bytes
-        )
-        telemetry.storage.peak_managed_store_bytes = max(
-            telemetry.storage.peak_managed_store_bytes, status.managed_store_bytes
-        )
-        telemetry.set_unique_verified_bytes(status.used_weight_bytes)
-        telemetry.quota_policy = runtime.storage.quota_policy
-        telemetry.eviction_policy = runtime.storage.eviction_policy
-        telemetry.finalize()
-        report = telemetry.to_report()
-        result.runs.append(report)
-        save_report(telemetry, runtime.storage.log_root)
-        await session.close()
-    runtime.storage = runtime.storage.__class__(
-        **{**runtime.storage.__dict__, "weight_cache_limit_bytes": original_limit}
-    )
-    runtime.cache.set_weight_limit(original_limit)
-    runtime.storage = runtime.storage.__class__(
-        **{**runtime.storage.__dict__, "block_size_bytes": original_block_size}
-    )
+    # Keep the caller's configuration intact even when a run raises: the sweep
+    # mutates both the runtime and the cache, so restoration belongs in a
+    # ``finally`` block rather than after the loop.
+    original_storage = runtime.storage
+    original_cache_storage = runtime.cache.storage
+    try:
+        for index in range(case.runs):
+            telemetry = RunTelemetry(run_id=f"bench-{int(time.time()*1000)}-{index}")
+            runtime.telemetry = telemetry
+            runtime.cache.telemetry = telemetry
+            runtime.cache.run_id = telemetry.run_id
+            runtime.cache.set_weight_limit(case.cache_budget_bytes)
+            runtime.storage = replace(
+                runtime.storage, weight_cache_limit_bytes=case.cache_budget_bytes
+            )
+            if case.cold:
+                await clear_cache(runtime)
+            session = await runtime.open_session(
+                case.model, backend_id=backend, materialize=materialize, device=device
+            )
+            try:
+                generation = await session.generate(case.prompt, max_tokens=case.max_tokens)
+                telemetry.inference.prompt_tokens = generation.prompt_tokens
+                telemetry.inference.generated_tokens = generation.generated_tokens
+                telemetry.inference.ttft_ms = generation.ttft_ms
+                telemetry.inference.generation_ms = generation.generation_ms
+                telemetry.inference.weight_wait_ms = generation.weight_wait_ms
+                telemetry.inference.load_weight_wait_ms = generation.load_weight_wait_ms
+                telemetry.inference.total_inference_ms = generation.generation_ms
+                telemetry.inference.status = "ok"
+                telemetry.model_alias = case.model
+                telemetry.repo = session.repo
+                telemetry.revision = session.revision
+                telemetry.artifact_format = session.layout.artifact_format
+                telemetry.backend_id = getattr(session.backend.capabilities, "backend_id", "")
+                telemetry.backend_version = getattr(session.backend.capabilities, "version", "")
+                telemetry.cold_or_warm = result.cold_or_warm
+                telemetry.storage.weight_cache_limit_bytes = case.cache_budget_bytes
+                telemetry.storage.managed_store_limit_bytes = (
+                    runtime.storage.managed_store_limit_bytes
+                )
+                status = runtime.cache.status()
+                telemetry.storage.current_weight_bytes = status.used_weight_bytes
+                telemetry.storage.peak_weight_bytes = max(
+                    telemetry.storage.peak_weight_bytes, status.used_weight_bytes
+                )
+                telemetry.storage.peak_managed_store_bytes = max(
+                    telemetry.storage.peak_managed_store_bytes, status.managed_store_bytes
+                )
+                telemetry.set_unique_verified_bytes(status.used_weight_bytes)
+                telemetry.quota_policy = runtime.storage.quota_policy
+                telemetry.eviction_policy = runtime.storage.eviction_policy
+                telemetry.finalize()
+                report = telemetry.to_report()
+                result.runs.append(report)
+                save_report(telemetry, runtime.storage.log_root)
+            finally:
+                await session.close()
+    finally:
+        runtime.storage = original_storage
+        runtime.cache.storage = original_cache_storage
     return result
 
 
@@ -209,15 +213,19 @@ def format_bench_table(results: list[BenchResult]) -> str:
         f"{'hit ratio':>10} {'ttft ms':>10} {'tok/s':>8}"
     )
     lines = [header, "-" * len(header)]
+
+    def display(value: Any) -> str:
+        return "-" if value is None else str(value)
+
     for result in results:
         summary = result.summary()
         lines.append(
             f"{result.cache_budget_bytes:>10} {result.cold_or_warm:>6} "
             f"{summary.get('downloaded_bytes_total', 0):>12} "
-            f"{str(summary.get('bytes_per_output_token', '-')):>12} "
-            f"{str(summary.get('cache_hit_ratio', '-')):>10} "
-            f"{str(summary.get('ttft_ms', '-')):>10} "
-            f"{str(summary.get('tokens_per_second', '-')):>8}"
+            f"{display(summary.get('bytes_per_output_token')):>12} "
+            f"{display(summary.get('cache_hit_ratio')):>10} "
+            f"{display(summary.get('ttft_ms')):>10} "
+            f"{display(summary.get('tokens_per_second')):>8}"
         )
     return "\n".join(lines)
 

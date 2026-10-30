@@ -31,6 +31,7 @@ from typing import Any
 from ..errors import BackendCapabilityMissing, BackendOutOfMemory
 from ..layout.model_map import ExpertPacking
 from ..provider import TensorKey
+from ..prefetch import PrefetchScheduler
 from .base import BackendCapabilities, GenerationResult, LoadContext
 
 from .selective_experts import ExpertSpec, SelectiveExpertMaterializer
@@ -155,6 +156,11 @@ class TransformersBackend:
                 dtype=context.dtype,
                 materialize_mode=str(context.options.get("materialize", "lazy")),
                 loop=asyncio.get_running_loop(),
+                prefetch_scheduler=(
+                    PrefetchScheduler(context.provider, telemetry=context.telemetry)
+                    if context.options.get("prefetch_layers", False)
+                    else None
+                ),
             )
             # Wire selective-MoE configuration from options.  Each spec dict
             # must have keys: tensor, dim, num_experts (proj is optional).
@@ -215,6 +221,8 @@ class TransformersBackend:
         materializer = handle.get("materializer")
         if materializer is not None:
             materializer.remove_lazy_hooks()
+            if materializer.prefetch_scheduler is not None:
+                await materializer.prefetch_scheduler.cancel_all()
         model = handle.get("model")
         if model is None:
             return
@@ -381,6 +389,7 @@ class _Materializer:
         dtype: str,
         materialize_mode: str = "lazy",
         loop: asyncio.AbstractEventLoop | None = None,
+        prefetch_scheduler: PrefetchScheduler | None = None,
     ) -> None:
         self.model = model
         self.layout = layout
@@ -390,11 +399,13 @@ class _Materializer:
         self.dtype = dtype
         self.mode = materialize_mode
         self.loop = loop
+        self.prefetch_scheduler = prefetch_scheduler
         self.materialized_bytes = 0
         self._groups: dict[int, list[str]] = {}
         self._meta_params: dict[str, Any] = {}
         self._layer_names: set[str] = set()
         self._handles: list[Any] = []
+        self.layer_profile: dict[str, dict[str, float | int]] = {}
         # -- selective MoE ---------------------------------------------------
         self.expert_specs: dict[str, ExpertSpec] = {}
         self.router_resolver: Any | None = None
@@ -795,6 +806,27 @@ class _Materializer:
             asyncio.get_event_loop().run_until_complete(coro)
 
     def _pre_hook(self, module: Any, args: Any):  # pragma: no cover - torch callback
+        layer_name = next(
+            (prefix.rstrip(".") for prefix, layer in self._layer_modules() if layer is module),
+            "unknown_layer",
+        )
+        started = time.perf_counter()
+        bytes_before = self.materialized_bytes
+        try:
+            return self._pre_hook_impl(module, args)
+        finally:
+            stats = self.layer_profile.setdefault(
+                layer_name, {"calls": 0, "materialize_ms": 0.0, "materialized_bytes": 0}
+            )
+            stats["calls"] = int(stats["calls"]) + 1
+            stats["materialize_ms"] = float(stats["materialize_ms"]) + (
+                time.perf_counter() - started
+            ) * 1000.0
+            stats["materialized_bytes"] = int(stats["materialized_bytes"]) + (
+                self.materialized_bytes - bytes_before
+            )
+
+    def _pre_hook_impl(self, module: Any, args: Any):
         names = self._names_of_module(module)
         if not names:
             return None
@@ -848,6 +880,19 @@ class _Materializer:
         self._expert_full_tensors.clear()
         for name in self._names_of_module(module):
             self._restore_meta(name)
+        if self.prefetch_scheduler is not None:
+            layers = self._layer_modules()
+            current = next((i for i, (_, layer) in enumerate(layers) if layer is module), -1)
+            if 0 <= current < len(layers) - 1:
+                next_module = layers[current + 1][1]
+                names = [
+                    resolved
+                    for name in self._names_of_module(next_module)
+                    if (resolved := self._resolve_name(name)) is not None
+                ]
+                keys = [TensorKey(tensor=name) for name in dict.fromkeys(names)]
+                if keys:
+                    self._run_coro(self.prefetch_scheduler.schedule(keys, priority=1))
         return None
 
     def _names_of_module(self, module: Any) -> list[str]:

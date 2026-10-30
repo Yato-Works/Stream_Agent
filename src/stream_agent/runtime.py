@@ -230,10 +230,11 @@ class StreamAgentRuntime:
         backend_name = backend_id or str(record.get("backend") or "") or "fixture"
         backend = create_backend(backend_name)
         capabilities = backend.capabilities
-        if artifact_format not in capabilities.formats:
+        if not capabilities.supports(artifact_format=artifact_format, device=device):
             raise BackendCapabilityMissing(
-                f"backend {backend_name!r} does not support the {artifact_format!r} format",
-                details={"backend": backend_name, "format": artifact_format},
+                f"backend {backend_name!r} does not support format {artifact_format!r} "
+                f"on device {device!r}",
+                details={"backend": backend_name, "format": artifact_format, "device": device},
             )
 
         revision_info = await self.source.list_files(repo, revision)

@@ -7,6 +7,7 @@ name = "stream-agent"
 version = "0.1.0.dev0"
 description = "Storage-budgeted on-demand model runtime: bounded local weight cache with remote-backed weight retrieval."
 readme = "README.md"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
 authors = [{ name = "Eli" }]
@@ -30,6 +31,7 @@ torch = ["torch>=2.2", "numpy>=1.24", "safetensors>=0.4", "transformers>=4.40", 
 # Hub metadata helpers for the source adapter (C2).
 hub = ["huggingface_hub>=0.26"]
 dev = ["pytest>=8", "pytest-asyncio>=0.23", "pytest-cov>=5"]
+benchmark = ["psutil>=5.9"]
 
 [project.scripts]
 stream-agent = "stream_agent.cli:main"
