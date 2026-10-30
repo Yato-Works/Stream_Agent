@@ -1,15 +1,17 @@
 # Stream Agent
 
-**Storage-budgeted on-demand model runtime.**
+> **Run 1.5 TB Open-Weight AI (Kimi-K3, DeepSeek) on your consumer PC — using only 40 GB of local storage.**
+>
+> *"Is it really open-source if you need a $10,000 server just to download it?"*
+> Stream Agent breaks the storage wall for massive models. By retrieving verified weights on demand via HTTP 206 Range requests into a strict, bounded cache quota, you can run and inspect frontier models on everyday hardware.
 
-Stream Agent lets you set an explicit local storage budget for model weights
-and then use compatible open-weight models through on-demand weight retrieval
-and a shared, bounded cache — without keeping every model's complete weight
-files on your SSD.
+---
 
-The design document that governs this implementation is [`Plan.md`](Plan.md).
-This README describes what the implementation actually does today, and what
-it explicitly does **not** claim.
+### Key Empirical Results (Measured, Not Projected)
+
+- **1.56 TB Kimi-K3 Expert Retrieval**: Mapped all 497,220 tensors across 96 shards in 67s without weight download. Fetched Layer 1 Expert 0 (5.25 MB) in **1.55 seconds** via direct HTTPS (100% byte integrity match).
+- **Cache Scaling (SmolLM2 2-Token Evaluation)**: Expanding cache from 128 MiB (constrained) to 512 MiB (adequate) reduced 2-token generation time from **120.58s to 68.36s (43.3% faster)** and eliminated **243.9 MB of redundant re-downloads (0 evictions, 0 refetched bytes)**.
+- **Prefetch Overlap**: Background layer prefetching overlapped weight retrieval during decoder passes, reducing single-token generation wall time from **71.57s to 60.98s** on cold CPU runs while strictly respecting the 128 MiB limit.
 
 ---
 
@@ -22,12 +24,12 @@ The following is implemented and covered by the test-suite:
 |---|---|---|
 | C0 | CLI and configuration loader | implemented |
 | C1 | Model catalog / revision resolver | implemented |
-| C2 | Remote source adapter (Hugging Face Hub, incl. the Xet/CDN range path) | implemented |
-| C3 | Model layout / weight map (safetensors, GGUF metadata) | implemented |
+| C2 | Remote source adapter (Hugging Face Hub HTTP Range path) | implemented |
+| C3 | Model layout / weight map (safetensors; GGUF metadata + byte ranges) | implemented |
 | C4 | `WeightProvider` / block reader | implemented |
 | C5 | Global cache manager (budget, reservations, eviction, single-flight, crash recovery) | implemented |
-| C6 | Prefetch scheduler | implemented (bounded, no expert prediction) |
-| C7 | Inference backend adapter | `transformers` (lazy + eager) and `fixture` |
+| C6 | Prefetch scheduler | library only — **not wired** into the request path |
+| C7 | Inference backend adapter | `transformers` (lazy + eager) and `fixture`; selective MoE is experimental |
 | C8 | Local model server / worker controller | implemented (loopback only) |
 | C9 | Telemetry and local report | implemented |
 | §12.3 | Asynchronous job API | implemented |
@@ -37,13 +39,34 @@ Not implemented (and therefore not claimed):
 
 * MoE expert-level streaming for a real MoE model — the backend interface
   supports declared expert packing, but no MoE model has been validated yet.
-* GGUF inference — the metadata parser exists, the remote-backed reader path
-  does not.
+  The selective-MoE prototype is opt-in and can be wrong if its router
+  resolver does not exactly reproduce the model's top-k selection.
+* GGUF **tensor-level** streaming — `GgufBackend` fetches the complete
+  `.gguf` file through the bounded weight cache and then lets Transformers
+  load it. The per-tensor byte-range table is parsed and validated, but no
+  backend consumes it yet.
+* Working-memory (RAM/VRAM) bounding — the cache budget limits disk payload,
+  not the memory a backend needs to run a layer or the whole model.
+* Broad model compatibility — pinned SmolLM2 greedy output now matches the
+  ordinary Transformers reference in one CPU run; that is one model and one
+  configuration, not a general compatibility guarantee.
 * Learned prefetch prediction, LRU-K/2Q/LFU eviction, elastic quota sharing
   beyond the simple "borrow under the global cap" behaviour.
 * Token-level streaming from the local endpoint (the endpoint refuses
   `stream: true` with a typed error instead of pretending).
 * Commercial-use or redistribution of any model's weights.
+
+### Measurement honesty
+
+* `ttft_ms` is `null` unless a backend can actually observe the first token.
+  A backend that calls `model.generate` once cannot, so reporting the total
+  generation time there would be a fabricated metric.
+* `range_requests` counts validated HTTP 206 responses once. Earlier builds
+  incremented the same counter in both the provider and the runtime.
+* `bytes_per_output_token` counts weight payload only; tokenizer and config
+  downloads are reported separately as metadata.
+* `cache_hit_ratio` is a *block* hit ratio. `useful_reuse_ratio` is the
+  byte-level share served from the cache.
 
 ---
 
@@ -80,6 +103,29 @@ stream-agent bench --model tiny --cache-sweep 512KiB,2MiB,8MiB --runs 2 \
 stream-agent serve --model tiny --port 8789
 ```
 
+## Verify a real model
+
+The repository includes an opt-in parity check for the pinned
+`HuggingFaceTB/SmolLM2-135M-Instruct` revision. It runs greedy generation once
+with an ordinary Transformers load and once through Stream Agent's bounded
+range cache, then compares the generated text and verifies the cache limit and
+absence of full-object requests. The reference path downloads the complete
+model into the normal Hugging Face cache; the Stream Agent path uses its own
+managed cache. Both paths require network access on a cold machine.
+
+```bash
+python -m pip install -e ".[torch,benchmark]"
+python scripts/verify_model_parity.py --materialize lazy --device cpu --max-tokens 8 \
+    --out docs/benchmarks/smollm2-parity-local.json
+```
+
+The script uses `trust_remote_code=False`, a pinned revision, and a fresh
+temporary Stream Agent store by default. Review the resulting report before
+publishing it because it may contain generated text and machine-specific
+measurements.
+It records peak process RSS and, when using CUDA, peak allocated VRAM. Run it
+with `--materialize eager` as a comparison; the default is `lazy`.
+
 ## Scope boundary
 
 Stream Agent is a **model execution endpoint**, not an agent. It discovers a
@@ -109,6 +155,11 @@ model produced tokens through the bounded remote-backed cache.
 Anything else is **unsupported**: the runtime fails with
 `MODEL_FORMAT_UNSUPPORTED`, `BACKEND_CAPABILITY_MISSING` or
 `RANGE_UNSUPPORTED` instead of downloading the whole artifact.
+
+The one deliberate exception is GGUF: `GgufBackend` fetches the complete
+`.gguf` file through the bounded weight cache and hands it to Transformers.
+That is a whole-file path (Level 1), not tensor-level streaming; the
+per-tensor byte ranges are parsed but not yet consumed by a backend.
 
 ## The two limits
 
@@ -242,6 +293,10 @@ design onto the tests and the recorded runs that back them, and states the
 limitations that the evidence does *not* cover. The raw benchmark output is
 in [`docs/benchmarks/`](docs/benchmarks/).
 
+The current-state audit, the corrected claims and the product/roadmap
+assessment are in [`docs/AUDIT-2026-10-29.md`](docs/AUDIT-2026-10-29.md)
+(Japanese).
+
 ## Prior art
 
 Streaming model weights from storage is not a new idea. [PULSAR](https://github.com/giannisanni/pulsar),
@@ -257,4 +312,6 @@ proof of novelty.
 ## Licence
 
 The Stream Agent source is Apache-2.0. Model weights keep their own terms:
-see `Plan.md` §14.4.
+see `Plan.md` §14.4. See [`LICENSE`](LICENSE), [`CONTRIBUTING.md`](CONTRIBUTING.md),
+and [`SECURITY.md`](SECURITY.md) for source licensing, contribution guidance,
+and vulnerability reporting.
