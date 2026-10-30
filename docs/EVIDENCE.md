@@ -86,6 +86,27 @@ single-expert Range fetch:
 - *End-to-end execution pending:* Retrieving isolated expert tensors proves remote layout addressability, but full local generation on Kimi-K3 still requires wiring custom MoE dispatch kernels, handling shared attention projections, and managing KV cache.
 - *Licensing:* Kimi-K3 Hub metadata specifies license identifier other, requiring user review before any distribution or deployment.
 
+## Selective MoE layer retrieval verification: Qwen1.5-MoE-A2.7B-Chat (2026-10-30)
+
+`Qwen/Qwen1.5-MoE-A2.7B-Chat` represents a 28.63 GB sparse MoE model with 24 decoder
+layers, each containing 60 routed experts (top-4 active per token).
+
+We evaluated selective on-demand retrieval for Layer 0 on a cold prompt (`'Hello, my name is'`):
+1. **Selective Embedding fetch:** The prompt tokens (`[9707, 11, 847, 829, 374]`) were
+   retrieved as individual rows from the 600 MB embedding table, transferring only
+   20,480 bytes to construct the input tensor.
+2. **Router Gate activation:** The Layer 0 router gate (240 KB) evaluated the input
+   representation and dynamically selected top-4 experts: `[19, 27, 41, 43]`.
+3. **Selective expert retrieval:** Only the tensors for the 4 selected experts (`gate_proj`,
+   `up_proj`, `down_proj`) were fetched via HTTP 206:
+   - Payload transferred: **66.00 MB** (vs 1,038 MB if all 60 Layer 0 experts were fetched)
+   - Transfer duration: 19.09 s over cold Wi-Fi.
+
+**Honest limitations and engineering implications:**
+- *Single-layer measurement:* This 93.6% bandwidth reduction applies to Layer 0 of one token. Across all 24 layers, a single cold token without cache will require retrieving active experts for each layer (~1.58 GB total active expert weights plus ~2.3 GB shared attention weights).
+- *Multi-token expert union:* As sequence length grows, the union of selected experts across tokens increases, so cache hits and eviction policies will determine effective throughput.
+- *End-to-end parity pending:* Full token generation through all 24 layers with output text matching standard Transformers is currently under active construction.
+
 ## Quality-model parity check (2026-10-29)
 
 The opt-in `scripts/verify_model_parity.py` check compared greedy generation
