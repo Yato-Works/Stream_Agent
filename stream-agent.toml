@@ -1,11 +1,4 @@
 # Example Stream Agent configuration (see Plan.md section 13.2).
-#
-# The two limits below mean different things:
-#   weight_cache_limit_gib    hard cap for retained weight payload blocks
-#   managed_store_limit_gib   hard cap for the whole managed directory
-#                             (payload + metadata + logs + temporary files)
-# The payload budget must stay below the store cap so that metadata and
-# in-flight downloads have room.
 
 [server]
 host = "127.0.0.1"
@@ -16,8 +9,8 @@ allow_remote_bind = false
 
 [storage]
 root = "~/.stream-agent"
-weight_cache_limit_gib = 18
-managed_store_limit_gib = 20
+weight_cache_limit_gib = 100
+managed_store_limit_gib = 105
 metadata_reserve_mib = 256
 staging_reserve_mib = 768
 quota_policy = "fixed"      # fixed | elastic
@@ -27,25 +20,38 @@ block_size_bytes = 8388608
 
 [source.huggingface]
 enabled = true
-# The token is read from this environment variable or a local credential
-# store. It is never written to this file, to a report or to a log.
 token_env = "HF_TOKEN"
 max_parallel_ranges = 4
 request_timeout_seconds = 120
 retry_limit = 4
 
-# Register a model with:
-#   stream-agent model add Qwen/Qwen3.8-27B --alias qwen38 --revision <sha>
-#
-# The revision must be a real commit sha; placeholder values are rejected.
-# Registering a model never downloads weight bytes.
+# ---------------------------------------------------------------------------
+# 100 GB SSD Multi-Model Setup: Qwen (20GB) + DeepSeek (40GB) + Kimi (40GB)
+# ---------------------------------------------------------------------------
 
-# [models.qwen38]
-# repo = "Qwen/Qwen3.8-27B"
-# revision = "<PINNED_COMMIT_SHA>"
-# format = "safetensors"
-# backend = "transformers"
-# weight_cache_quota_gib = 3
-# quota_mode = "fixed"
-# license_review = "pending"
-# allow_remote_code = false
+[models.qwen27b]
+repo = "Qwen/Qwen3.8-27B"
+revision = "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0"
+format = "safetensors"
+weight_cache_quota_gib = 20
+quota_mode = "fixed"
+license_review = "accepted"
+allow_remote_code = false
+
+[models.deepseek_flash]
+repo = "deepseek-ai/DeepSeek-V4.1-Flash-1017"
+revision = "1bae0e1088993b9b82de08f59de5be5a34e42170"
+format = "safetensors"
+weight_cache_quota_gib = 40
+quota_mode = "elastic"
+license_review = "accepted"
+allow_remote_code = false
+
+[models.kimi_k3]
+repo = "moonshotai/Kimi-K3"
+revision = "f831ab66814297da540d832a5235f8e904f29d06"
+format = "safetensors"
+weight_cache_quota_gib = 40
+quota_mode = "elastic"
+license_review = "accepted"
+allow_remote_code = false

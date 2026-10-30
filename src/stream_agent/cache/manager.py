@@ -148,6 +148,11 @@ class CacheManager(BudgetMixin):
         )
 
     # -- pins --------------------------------------------------------------
+    def has_block(self, block_key: str) -> bool:
+        """Return True when the block is present and verified in the weight cache."""
+        entry = self._entries.get(block_key)
+        return entry is not None and entry.verified
+
     async def pin(self, block_key: str) -> None:
         self._pins[block_key] = self._pins.get(block_key, 0) + 1
         entry = self._entries.get(block_key)

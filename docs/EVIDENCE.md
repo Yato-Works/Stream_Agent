@@ -4,10 +4,188 @@ This document maps the acceptance gates of `Plan.md` §2.2 onto the evidence
 that the implementation actually produces. Every statement below is backed by
 a test in `tests/` or by a recorded run; nothing here is a projection.
 
-**Measurement date:** 2026-10-22
+**Measurement date:** 2026-10-22 (measurement corrections applied 2026-10-29)
 **Reference hardware:** Windows 10, Intel CPU (16 logical cores), 16 GiB RAM,
 NVIDIA RTX 3050 (8 GiB VRAM), Python 3.11.15
 **Network:** direct HTTPS to `huggingface.co` (no proxy, no bandwidth shaping)
+
+## Layer prefetch comparison (2026-10-30)
+
+One-token lazy CPU runs used separate cold cache roots, the same pinned
+SmolLM2-135M-Instruct revision, and a 128 MiB cache limit. Both matched the
+reference text ` Emily` and stayed within the cache limit. Without prefetch,
+generation took 71.57 s and measured weight wait was 70.92 s. With prefetch,
+generation took 62.18 s and demand weight wait was 61.27 s. This single pair
+suggests useful overlap, but is not enough to establish a stable speedup.
+
+Both runs downloaded 297,603,397 bytes and recorded 20 evictions and
+25,165,824 refetched bytes. The prefetch run used 1.40 GiB peak RSS versus
+1.36 GiB without prefetch. Its overlapping prefetch wait (94.24 s) is a
+cumulative timer and must not be added to generation wall time. Prefetch
+telemetry currently counts repeated semantic requests, so its multi-gigabyte
+intent/useful totals are not unique bytes or network traffic; use the network
+download and cache counters above for those quantities. More repetitions and
+longer generation runs are needed before drawing a performance conclusion.
+
+Reports: [prefetch off](benchmarks/smollm2-prefetch-off-1token-2026-10-30.json),
+[prefetch on](benchmarks/smollm2-prefetch-on-1token-2026-10-30.json).
+
+### Prefetch telemetry deduplication update (2026-10-30)
+
+Following the initial prefetch observation, prefetch telemetry was corrected to
+deduplicate block counting and exclude blocks already retained in the verified
+cache. Under the corrected telemetry, a rerun with prefetch enabled recorded:
+- Unique prefetched bytes: **184,549,376 B (184.5 MB)** (aligning with physical layer weights, previously inflated to 2.13 GB by semantic repeats)
+- Useful prefetch wait overlap: generation wall time was 60.98 s with weight wait 60.36 s (vs 71.57 s and 70.92 s with prefetch disabled)
+- Peak RSS: 1.39 GiB, cache retained: 128 MiB (134,217,728 B)
+
+### Cache capacity vs. thrashing: 128 MiB vs. 512 MiB (2-token runs)
+
+To evaluate the effect of user-configured cache size on recurring weight fetches,
+two-token greedy runs were conducted under identical conditions comparing a constrained
+cache (128 MiB, below total model weights ~269 MB) and an adequate cache (512 MiB):
+
+| Metric | 128 MiB Cache (constrained) | 512 MiB Cache (adequate) | Difference / Impact |
+|---|---:|---:|---|
+| Generation time (2 tokens) | 120.58 s | 68.36 s | **-52.22 s (43.3% faster)** |
+| Weight wait time | 119.73 s | 67.38 s | **-52.35 s (43.7% less wait)** |
+| Total downloaded bytes | 516,332,301 B | 272,437,573 B | **-243.9 MB (47.2% network reduction)** |
+| Cache evictions | 47 | 0 | **Zero thrashing / evictions** |
+| Refetched bytes (churn) | 243,894,728 B | 0 B | **Zero duplicate network traffic** |
+| Cache hits / misses | 537 hits / 63 misses | 567 hits / 33 misses | **Misses reduced by 47.6%** |
+| Peak process RSS | 1.36 GB | 1.43 GB | Modest +70 MB difference |
+| Output correctness |  Emily, (exact match) |  Emily, (exact match) | Parity preserved |
+
+**Honest limitations and engineering implications:**
+1. *Dense models require the working set:* For dense models (where every token requires all layers), setting the cache smaller than the model forces cyclical cache thrashing on every token. An LRU cache cannot prevent this without sufficient physical capacity.
+2. *Bandwidth bounds inference latency:* When weights are cold or evicted, per-token latency is dominated by HTTP transfer and disk I/O, not FLOPs (67–119 seconds for 2 tokens on cold networks). This confirms that streaming requires either a persistent local cache quota or selective MoE activation to achieve interactive token rates.
+
+Reports: [128 MiB 2-token](benchmarks/smollm2-cache-128mb-2token.json),
+[512 MiB 2-token](benchmarks/smollm2-cache-512mb-2token.json).
+
+## Massive sparse model verification: Kimi-K3 layout & single-expert fetch (2026-10-30)
+
+moonshotai/Kimi-K3 represents a 1.56 TB sparse MoE architecture with 96 safetensors
+shards and 497,220 total tensors. Storing or streaming the whole model is infeasible
+for consumer workstations.
+
+We conducted an empirical probe of the remote repository and executed an exact
+single-expert Range fetch:
+1. **Header mapping:** Range requests over safetensors headers mapped all 497,220
+   tensors in 67.16 seconds without downloading any weight payload.
+2. **MoE distribution:** 495,144 tensors (99.6% of all tensors) belong to MoE blocks
+   (lock_sparse_moe.experts.*), pre-packed as 8-bit quantized weights (dtype=U8).
+3. **Targeted expert retrieval:** A direct HTTP 206 Range request targeted Layer 1,
+   Expert 0 (w1.weight_packed):
+   - Target shard: model-00002-of-000096.safetensors
+   - Exact byte range: 1,268,562,960 - 1,274,067,984 (5,505,024 bytes / ~5.25 MB)
+   - Transfer latency: **1.55 seconds** (3.38 MB/s direct HTTPS)
+   - Verification: Received payload matched header-declared bytes and shape (3072, 1792) exactly.
+
+**Honest limitations:**
+- *End-to-end execution pending:* Retrieving isolated expert tensors proves remote layout addressability, but full local generation on Kimi-K3 still requires wiring custom MoE dispatch kernels, handling shared attention projections, and managing KV cache.
+- *Licensing:* Kimi-K3 Hub metadata specifies license identifier other, requiring user review before any distribution or deployment.
+
+## Quality-model parity check (2026-10-29)
+
+The opt-in `scripts/verify_model_parity.py` check compared greedy generation
+from a normal full Transformers load and Stream Agent for
+`HuggingFaceTB/SmolLM2-135M-Instruct` at pinned revision
+`12fd25f77366fa6b3b4b768ec3050bf629380bac` on CPU, with an 8-token limit.
+Both produced exactly ` Emily, and I'm a senior at`. Stream Agent retained
+126,454,216 weight bytes below its 134,217,728-byte cache cap, made zero
+full-object requests, and transferred 298,228,493 cumulative bytes because
+the small cache re-fetched blocks. The machine-readable result is
+[`docs/benchmarks/smollm2-parity-2026-10-29.json`](benchmarks/smollm2-parity-2026-10-29.json).
+
+This establishes output parity for one pinned model, device and greedy
+configuration. The original 2026-10-29 run used eager materialization and did
+not record peak RSS/VRAM, so it does not establish bounded working memory.
+The verifier now supports a lazy run and records peak process RSS and peak
+allocated VRAM when available; those results must be recorded separately
+before making a memory-bound claim.
+
+### One-token lazy/eager comparison
+
+Both paths generated the same first token (` Emily`) as the pinned reference.
+The runs used the same 128 MiB cache root sequentially, so the eager run began
+with some blocks retained by the lazy run; transfer totals are not a cold-vs-
+cold comparison.
+
+| Mode | Load | Generate 1 token | Peak process RSS | Cache peak | Downloaded bytes |
+|---|---:|---:|---:|---:|---:|
+| lazy | 18.35 s | 62.46 s | 1,354,207,232 B | 128 MiB | 297,603,397 B |
+| eager | 90.20 s | 0.051 s | 1,398,292,480 B | 126,454,216 B | 286,462,864 B |
+
+Reports: [profiled lazy](benchmarks/smollm2-lazy-profiled-1token-2026-10-29.json),
+[earlier lazy](benchmarks/smollm2-lazy-1token-2026-10-29.json),
+[eager](benchmarks/smollm2-eager-1token-2026-10-29.json).
+
+The profiled run spent 60.51 seconds waiting for/materializing layer weights
+out of 60.91 seconds total generation time. All 30 decoder layers were loaded
+once, at about 7.08 MB each; the complete run fetched 285,212,672 bytes while
+the cache retained only 128 MiB. This attributes the observed latency primarily
+to weight delivery and cache churn, not CPU matrix computation. It also gives
+the next optimization target: preserve a useful hot working set across tokens
+and, for MoE, retrieve only the experts the real router selected.
+
+This is a useful first trade-off measurement, not a low-RAM result. Lazy reduced
+peak RSS by only about 44 MiB in this process and took about 62 seconds to
+generate one token. The process baseline includes Python, PyTorch, tokenizer,
+and model skeleton; these figures are not a pure model-working-set measurement.
+The eager row is warm-cache and the lazy row cold-cache, so transfer bytes and
+load times should not be compared as controlled cold-run results. Neither row
+supports a claim about Kimi K3 or bounded RAM.
+
+### Two-token cache reuse check
+
+A second run used the same 128 MiB cache root and generated two tokens in
+116.16 s. Output still matched the reference, but 504,566,672 bytes were
+downloaded; 369,723,848 bytes were recorded as refetched after eviction, with
+62 misses and 62 evictions. The cache peaked exactly at its 128 MiB limit.
+The report is [here](benchmarks/smollm2-lazy-2token-2026-10-29.json).
+
+This confirms the dense-model boundary: when every token needs every layer but
+the retained cache is smaller than the model's reusable weight set, sequential
+layer traversal cycles through the cache and evicts data needed on the next
+token. A better eviction heuristic alone cannot fix that capacity mismatch.
+The strategic route to much larger sparse models is exact expert-level reads
+plus a cache sized for the useful active-expert set, not repeatedly paging all
+dense layer weights from the network.
+
+## Measurement corrections (2026-10-29)
+
+A code audit found several reporting defects. They are fixed, and the
+historical numbers below are annotated rather than silently rewritten:
+
+| Defect | Effect on earlier reports | Fix |
+|---|---|---|
+| `range_requests` was incremented in both `RemoteWeightProvider` and the runtime's `range_ok` handler | every transfer was counted twice; **halve historical range counts** | single increment in `runtime._on_source_event` |
+| `ttft_ms` was set to total generation time in every backend | a fabricated TTFT; it was never a first-token measurement | `ttft_ms` is now `null` when the backend cannot observe the first token |
+| GGUF's whole-file read went through the metadata path | weight bytes were reported as metadata and bypassed the weight budget | `read_file()` routes shard paths through the bounded weight cache |
+| Cache hits did not add the reading model to `entry.refs` | a second model could use a shared cache without quota attribution | the hit path now records the reference |
+| Selective MoE zero-filled unselected experts and could restore `meta` parameters while reusing detached tensors | silent wrong output or a hard failure | opt-in only, dense fallback on resolver failure, tensor identity check, and cleanup in the post-hook |
+| GGML type table was shifted after type 19 | wrong byte ranges for many quantized GGUF types | corrected block-size/element table; unknown types now fail loudly |
+
+A fresh verification run after the fixes (8 MiB budget, 4 generated tokens,
+262 144 byte blocks, single cold run) recorded:
+
+```text
+downloaded_bytes_total     5 977 351
+weight_downloaded_bytes    4 131 280   (the full shard, fetched once)
+metadata_downloaded_bytes  1 846 071   (tokenizer + config files)
+range_requests             23          (18 model.safetensors + 5 metadata)
+full_object_requests       0
+cache hits / misses        74 / 16
+ttft_ms                    null
+generation_ms              194.26
+tokens/s                   20.59
+peak weight cache          4 393 424
+```
+
+The 23 range requests reconcile exactly with the logged requests: one 1 MiB
+header probe, one 64-byte capability probe, sixteen 256 KiB data blocks and
+five metadata files.
 
 ---
 
@@ -18,7 +196,7 @@ NVIDIA RTX 3050 (8 GiB VRAM), Python 3.11.15
 
 | Evidence | Where |
 |---|---|
-| A `200 OK` full-object answer to a range request is rejected with `RANGE_UNSUPPORTED` and the body is discarded (no silent full download) | `tests/test_sources.py::test_range_request_requires_206` |
+| A `200 OK` full-object answer to a range request is rejected with `RANGE_UNSUPPORTED`; the response stream is closed without consuming the body (no silent full download) | `tests/test_sources.py::test_full_object_body_is_never_consumed` |
 | A `Content-Range` that does not match the request is rejected with `RANGE_MISMATCH` | `tests/test_sources.py::test_wrong_content_range_is_rejected` |
 | A truncated body is rejected | `tests/test_sources.py::test_short_body_is_rejected` |
 | 401 / 403 / 404 / 429 / 5xx map to `SOURCE_AUTH`, `SOURCE_FORBIDDEN`, `SOURCE_NOT_FOUND`, `SOURCE_RATE_LIMITED`, `SOURCE_UNAVAILABLE` | `tests/test_sources.py::test_status_codes_map_to_typed_errors` |
@@ -62,7 +240,7 @@ recorded with a byte count.
 |---|---|
 | `model add` resolves metadata, probes range support and reports the result; it never downloads weight bytes | `stream-agent model add` output: *"range access: verified (206 partial content)"*, *"no weight bytes were downloaded"* |
 | Opening a session re-probes the source; an unsupported path raises `RANGE_UNSUPPORTED` before any long transfer | `src/stream_agent/runtime.py::open_session` |
-| A source that ignores `Range` is treated as unsupported, never as a full download | `tests/test_sources.py::test_range_request_requires_206` |
+| A source that ignores `Range` is treated as unsupported, never as a full download | `tests/test_sources.py::test_range_request_requires_206`, `tests/test_sources.py::test_full_object_body_is_never_consumed` |
 
 ---
 
@@ -94,7 +272,7 @@ Observed (cold cache, 512 KiB budget, 32 generated tokens, one run):
 | Metric | Value |
 |---|---|
 | downloaded bytes | 6 637 735 (weight payload + 1 842 764 byte tokenizer + config files) |
-| range requests | 24 |
+| range requests | 24 in the historical report — **double-counted**; the real count was 12 (see the correction section) |
 | full object requests | 0 |
 | cache hits / misses | 575 / 19 |
 | evictions / re-fetched bytes | 17 / 4 330 400 |
@@ -238,12 +416,21 @@ Reading of the data:
 
 ## Limitations that are *not* covered by this evidence
 
-* No MoE model has been validated. The expert interface exists, but no
-  measured expert-level streaming result exists.
-* No GGUF inference path exists.
+* No MoE model has been validated. The expert interface exists and the
+  selective materialiser has unit tests, but no measured expert-level
+  streaming result exists and the selective path is experimental.
+* GGUF inference exists only as a whole-file fetch followed by Transformers;
+  tensor-level GGUF streaming is not implemented and not measured.
+* The prefetch scheduler is not wired into the request path, so the measured
+  runs contain no prefetch effect (the prefetch counters are zero).
+* No backend can observe the first token today, so no true TTFT has been
+  measured. `ttft_ms` is reported as `null` rather than approximated.
 * The measured model is a random-weight test model of ~4 MB. The numbers say
   nothing about a 27B or a 671B model; for those, the working set, not the
   cache, becomes the binding constraint.
+* The cache sweep numbers in this document predate the range-counter fix.
+  Their byte and hit-ratio figures are unaffected, but their range-request
+  counts (if quoted elsewhere) must be halved.
 * The network profile is an unthrottled residential connection. The bytes-per
   token figures would change on a slow or metered link; the *cache* effect
   would not.

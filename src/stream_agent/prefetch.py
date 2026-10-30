@@ -62,17 +62,41 @@ class PrefetchScheduler:
         """Queue a prefetch; returns ``None`` when the budget does not allow it."""
         if not keys:
             return None
-        if self._inflight_bytes >= self.max_bytes:
+        sizes = [self._key_size(key) for key in keys]
+        requested_bytes = sum(sizes)
+        available = min(
+            self.max_bytes - self._inflight_bytes,
+            self.provider.cache.free_weight_bytes(),
+        )
+        if requested_bytes > available:
             self.stats.skipped += 1
             return None
         self._active = True
         self.stats.handles += 1
-        handle = await self.provider.prefetch(keys, priority)
+        self._inflight_bytes += requested_bytes
+        try:
+            handle = await self.provider.prefetch(
+                keys, priority, concurrency=self._sem
+            )
+        except BaseException:
+            self._release_bytes(requested_bytes)
+            raise
         self._handles.append(handle)
         self.stats.requested += len(keys)
+        self.stats.requested_bytes += requested_bytes
+        for task, size in zip(handle.tasks, sizes):
+            task.add_done_callback(lambda _task, n=size: self._release_bytes(n))
         if self.telemetry is not None:
             self.telemetry.cache.prefetched_bytes += 0
         return handle
+
+    def _key_size(self, key: WeightKey) -> int:
+        """Estimate requested payload from the exact semantic byte range."""
+        _, start, end = self.provider._range_for(key)
+        return max(0, end - start + 1)
+
+    def _release_bytes(self, size: int) -> None:
+        self._inflight_bytes = max(0, self._inflight_bytes - size)
 
     async def cancel(self, handle: PrefetchHandle | None) -> None:
         if handle is None:
@@ -104,7 +128,11 @@ class PrefetchScheduler:
         return {
             "requested": self.stats.requested,
             "requested_bytes": self.stats.requested_bytes,
-            "useful_bytes": self.stats.useful_bytes,
+            "useful_bytes": (
+                self.telemetry.cache.useful_prefetched_bytes
+                if self.telemetry is not None
+                else self.stats.useful_bytes
+            ),
             "cancelled": self.stats.cancelled,
             "skipped": self.stats.skipped,
             "handles": self.stats.handles,

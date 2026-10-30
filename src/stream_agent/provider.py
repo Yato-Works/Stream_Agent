@@ -120,8 +120,11 @@ class RemoteWeightProvider:
         self.max_parallel_blocks = max(1, int(max_parallel_blocks))
         self.metadata_root = Path(metadata_root) if metadata_root else None
         self._prefetched: dict[str, int] = {}
+        self._prefetched_blocks_seen: set[str] = set()
         self._weight_wait_ms = 0.0
+        self._prefetch_wait_ms = 0.0
         self._lock = asyncio.Lock()
+        self._prefetch_sem = asyncio.Semaphore(self.max_parallel_blocks)
 
     # -- accounting --------------------------------------------------------
     @property
@@ -132,6 +135,10 @@ class RemoteWeightProvider:
         value = self._weight_wait_ms
         self._weight_wait_ms = 0.0
         return value
+
+    @property
+    def prefetch_wait_ms(self) -> float:
+        return self._prefetch_wait_ms
 
     # -- block helpers -----------------------------------------------------
     def _block_bounds(self, start: int, end: int, file_size: int) -> list[tuple[int, int]]:
@@ -198,13 +205,17 @@ class RemoteWeightProvider:
                 data = await self.cache.fetch_block(request, fetcher)
             results[(block_start, block_end)] = data
             if demand:
-                prefetched = self._prefetched.pop(request.key, None)
-                if prefetched is not None and self.telemetry is not None:
-                    self.telemetry.cache.useful_prefetched_bytes += len(data)
+                prefetched_size = self._prefetched.pop(request.key, None)
+                if prefetched_size is not None and self.telemetry is not None:
+                    self.telemetry.cache.useful_prefetched_bytes += prefetched_size
 
         started = time.perf_counter()
         await asyncio.gather(*(load(bs, be) for bs, be in blocks))
-        self._weight_wait_ms += (time.perf_counter() - started) * 1000.0
+        elapsed_ms = (time.perf_counter() - started) * 1000.0
+        if demand:
+            self._weight_wait_ms += elapsed_ms
+        else:
+            self._prefetch_wait_ms += elapsed_ms
 
         chunks: list[bytes] = []
         for block_start, block_end in blocks:
@@ -285,7 +296,8 @@ class RemoteWeightProvider:
 
     # -- prefetch ----------------------------------------------------------
     async def prefetch(
-        self, keys: Sequence[WeightKey], priority: int = 0
+        self, keys: Sequence[WeightKey], priority: int = 0,
+        *, concurrency: asyncio.Semaphore | None = None,
     ) -> PrefetchHandle:
         """Warm the cache for the given units.
 
@@ -294,20 +306,28 @@ class RemoteWeightProvider:
         """
         handle = PrefetchHandle(prefetch_id=f"pf-{time.time_ns()}", keys=tuple(keys))
         for key in keys:
-            task = asyncio.create_task(self._prefetch_one(key))
+            task = asyncio.create_task(self._prefetch_one(key, concurrency=concurrency))
             handle.tasks.append(task)
         return handle
 
-    async def _prefetch_one(self, key: WeightKey) -> None:
+    async def _prefetch_one(
+        self, key: WeightKey, *, concurrency: asyncio.Semaphore | None = None
+    ) -> None:
         try:
-            path, start, end = self._range_for(key)
-            blocks = self._blocks_for(path, start, end)
-            for block_start, block_end in blocks:
-                block_key = self._block_key_for(path, block_start, block_end)
-                self._prefetched[block_key] = block_end - block_start + 1
-                if self.telemetry is not None:
-                    self.telemetry.cache.prefetched_bytes += block_end - block_start + 1
-            await self._read_range(path, start, end, demand=False)
+            sem = concurrency or self._prefetch_sem
+            async with sem:
+                path, start, end = self._range_for(key)
+                blocks = self._blocks_for(path, start, end)
+                for block_start, block_end in blocks:
+                    block_key = self._block_key_for(path, block_start, block_end)
+                    block_size = block_end - block_start + 1
+                    self._prefetched[block_key] = block_size
+                    if block_key not in self._prefetched_blocks_seen:
+                        self._prefetched_blocks_seen.add(block_key)
+                        if not self.cache.has_block(block_key):
+                            if self.telemetry is not None:
+                                self.telemetry.cache.prefetched_bytes += block_size
+                await self._read_range(path, start, end, demand=False)
         except asyncio.CancelledError:  # pragma: no cover - cooperative cancel
             raise
         except Exception:
@@ -356,6 +376,7 @@ class RemoteWeightProvider:
             "block_size_bytes": self.block_size_bytes,
             "tensors": len(self.layout.tensors),
             "weight_wait_ms": round(self._weight_wait_ms, 3),
+            "prefetch_wait_ms": round(self._prefetch_wait_ms, 3),
         }
 
 
