@@ -9,7 +9,7 @@ description = "Storage-budgeted on-demand model runtime: bounded local weight ca
 readme = "README.md"
 license-files = ["LICENSE"]
 requires-python = ">=3.10"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
 authors = [{ name = "Eli" }]
 keywords = ["llm", "cache", "moe", "inference", "weights"]
 classifiers = [
