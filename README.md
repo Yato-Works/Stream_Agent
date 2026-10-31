@@ -26,7 +26,7 @@ This is an experimental implementation of the `v0.1-design` specification.
 The following is implemented and covered by the test-suite:
 
 | Area | Component | State |
-|---|---|---|
+| --- | --- | --- |
 | C0 | CLI and configuration loader | implemented |
 | C1 | Model catalog / revision resolver | implemented |
 | C2 | Remote source adapter (Hugging Face Hub HTTP Range path) | implemented |
@@ -42,35 +42,35 @@ The following is implemented and covered by the test-suite:
 
 Not implemented (and therefore not claimed):
 
-* MoE expert-level streaming for a real MoE model — the backend interface
+- MoE expert-level streaming for a real MoE model — the backend interface
   supports declared expert packing, but no MoE model has been validated yet.
   The selective-MoE prototype is opt-in and can be wrong if its router
   resolver does not exactly reproduce the model's top-k selection.
-* GGUF **tensor-level** streaming — `GgufBackend` fetches the complete
+- GGUF **tensor-level** streaming — `GgufBackend` fetches the complete
   `.gguf` file through the bounded weight cache and then lets Transformers
   load it. The per-tensor byte-range table is parsed and validated, but no
   backend consumes it yet.
-* Working-memory (RAM/VRAM) bounding — the cache budget limits disk payload,
+- Working-memory (RAM/VRAM) bounding — the cache budget limits disk payload,
   not the memory a backend needs to run a layer or the whole model.
-* Broad model compatibility — pinned SmolLM2 greedy output now matches the
+- Broad model compatibility — pinned SmolLM2 greedy output now matches the
   ordinary Transformers reference in one CPU run; that is one model and one
   configuration, not a general compatibility guarantee.
-* Learned prefetch prediction, LRU-K/2Q/LFU eviction, elastic quota sharing
+- Learned prefetch prediction, LRU-K/2Q/LFU eviction, elastic quota sharing
   beyond the simple "borrow under the global cap" behaviour.
-* Token-level streaming from the local endpoint (the endpoint refuses
+- Token-level streaming from the local endpoint (the endpoint refuses
   `stream: true` with a typed error instead of pretending).
-* Commercial-use or redistribution of any model's weights.
+- Commercial-use or redistribution of any model's weights.
 
 ### Measurement honesty
 
-* `ttft_ms` is `null` unless a backend can actually observe the first token.
+- `ttft_ms` is `null` unless a backend can actually observe the first token.
   A backend that calls `model.generate` once cannot, so reporting the total
   generation time there would be a fabricated metric.
-* `range_requests` counts validated HTTP 206 responses once. Earlier builds
+- `range_requests` counts validated HTTP 206 responses once. Earlier builds
   incremented the same counter in both the provider and the runtime.
-* `bytes_per_output_token` counts weight payload only; tokenizer and config
+- `bytes_per_output_token` counts weight payload only; tokenizer and config
   downloads are reported separately as metadata.
-* `cache_hit_ratio` is a *block* hit ratio. `useful_reuse_ratio` is the
+- `cache_hit_ratio` is a *block* hit ratio. `useful_reuse_ratio` is the
   byte-level share served from the cache.
 
 ---
@@ -147,7 +147,7 @@ tool behaviour more reliable.
 ## Supported models
 
 | repository | format | weight map | end-to-end generation | notes |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | `hf-internal-testing/tiny-random-LlamaForCausalLM` | safetensors | yes | yes (Transformers backend) | random-weight test model; used for the benchmarks |
 | `Qwen/Qwen3.8-27B` | safetensors | yes (1 199 tensors) | no | 55.6 GB of weights; the working set does not fit this machine |
 | `moonshotai/Kimi-K3` | safetensors | yes (497 220 tensors) | no | 1.56 TB of weights; licence id is `other`, review required |
@@ -171,9 +171,9 @@ per-tensor byte ranges are parsed but not yet consumed by a backend.
 The configuration distinguishes two budgets and the CLI never calls either of
 them "total storage":
 
-* `weight_cache_limit_gib` — hard limit for retained and in-flight **weight
+- `weight_cache_limit_gib` — hard limit for retained and in-flight **weight
   payload** blocks.
-* `managed_store_limit_gib` — hard limit for the **whole managed directory**
+- `managed_store_limit_gib` — hard limit for the **whole managed directory**
   (payload + metadata + logs + temporary files).
 
 If your 20 GiB is everything you have, set the managed-store cap and leave
@@ -213,14 +213,14 @@ Inference Backend Adapter ----> WeightProvider
 
 The cache manager owns the central contract:
 
-* the persistent weight cache never exceeds the configured hard limit,
+- the persistent weight cache never exceeds the configured hard limit,
   including in-flight reservations (capacity is reserved *before* a byte is
   written);
-* only verified data is served; a corrupted block is dropped, never returned;
-* revisions are pinned — weight blocks from different commits are never mixed;
-* concurrent requests for the same immutable block share one transfer
+- only verified data is served; a corrupted block is dropped, never returned;
+- revisions are pinned — weight blocks from different commits are never mixed;
+- concurrent requests for the same immutable block share one transfer
   (single-flight);
-* pinned blocks are never evicted, and a pinned working set that cannot fit
+- pinned blocks are never evicted, and a pinned working set that cannot fit
   the budget produces `WORKING_SET_EXCEEDS_BUDGET` instead of a deadlock.
 
 ## Error contract
@@ -242,7 +242,7 @@ stream-agent --json run tiny --prompt "hi"   # errors are printed as [CODE] mess
 `stream-agent serve --model <alias>` exposes, on loopback only:
 
 | Route | Purpose |
-|---|---|
+| --- | --- |
 | `GET /health` | process and backend health, no secrets |
 | `GET /v1/models` | registered models and the implemented capability fields |
 | `POST /v1/chat/completions` | one bounded inference request |
@@ -263,15 +263,15 @@ the latency expectation is stated in the tool description.
 
 ## Security and licence posture
 
-* `allow_remote_code = false` by default; a repository that needs custom code
+- `allow_remote_code = false` by default; a repository that needs custom code
   is blocked with `REMOTE_CODE_BLOCKED` until it is explicitly reviewed.
-* Tokens are read from an environment variable or a credential store. They are
+- Tokens are read from an environment variable or a credential store. They are
   never written to the configuration, to a report or to a log, and signed URLs
   are never persisted.
-* The licence identifier of a model is recorded per revision. It is an
+- The licence identifier of a model is recorded per revision. It is an
   indicator, not a legal conclusion; `license_review = "required"` blocks
   unattended inference for that model.
-* Stream Agent never mirrors or re-hosts model weights.
+- Stream Agent never mirrors or re-hosts model weights.
 
 ## Tests
 
