@@ -16,6 +16,8 @@ htmlcov/
 
 # Stream Agent managed store (never commit cached weights or metadata)
 .stream-agent/
+.cache-*/
+.bench-*/
 *.sqlite3
 *.sqlite3-wal
 *.sqlite3-shm

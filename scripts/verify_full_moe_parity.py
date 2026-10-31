@@ -16,7 +16,11 @@ from pathlib import Path
 import torch
 import torch.nn.functional as F
 from transformers import AutoConfig, AutoTokenizer
-from transformers.models.qwen2_moe.modeling_qwen2_moe import Qwen2MoeDecoderLayer, Qwen2MoeRotaryEmbedding
+from transformers.models.qwen2_moe.modeling_qwen2_moe import (
+    Qwen2MoeDecoderLayer,
+    Qwen2MoeRotaryEmbedding,
+    create_causal_mask,
+)
 
 from stream_agent.config import SourceConfig
 from stream_agent.layout.model_map import build_layout
@@ -196,13 +200,24 @@ async def main():
             layer.mlp.shared_expert.up_proj.weight.data.copy_(tensors[f"{prefix}mlp.shared_expert.up_proj.weight"])
             layer.mlp.shared_expert.down_proj.weight.data.copy_(tensors[f"{prefix}mlp.shared_expert.down_proj.weight"])
 
-            # Compute Self-Attention with RoPE
+            # Compute Self-Attention with RoPE and causal mask
             position_ids = torch.arange(hidden_states.shape[1], dtype=torch.long, device=args.device).unsqueeze(0)
             cos, sin = rotary_emb(hidden_states, position_ids)
+            causal_mask = create_causal_mask(
+                config=cfg,
+                inputs_embeds=hidden_states,
+                attention_mask=None,
+                past_key_values=None,
+                position_ids=position_ids,
+            )
 
             residual = hidden_states
             normed_hidden = layer.input_layernorm(hidden_states)
-            attn_out = layer.self_attn(normed_hidden, position_embeddings=(cos, sin))[0]
+            attn_out = layer.self_attn(
+                normed_hidden,
+                attention_mask=causal_mask,
+                position_embeddings=(cos, sin),
+            )[0]
             hidden_states = residual + attn_out
 
             # MoE Routing (Exact official gate on post_attention_layernorm)
@@ -232,9 +247,9 @@ async def main():
                 layer.mlp.experts.gate_up_proj.data[eid].copy_(gate_up)
                 layer.mlp.experts.down_proj.data[eid].copy_(down_t)
 
-            # Official MoE block computation
+            # Official MoE block computation (MUST pass normed_for_moe, matching Qwen2MoeDecoderLayer.forward)
             residual = hidden_states
-            moe_out = layer.mlp(hidden_states)
+            moe_out = layer.mlp(normed_for_moe)
             hidden_states = residual + moe_out
 
             dur = time.perf_counter() - layer_t0
@@ -247,9 +262,15 @@ async def main():
         final_normed = hidden_states * torch.rsqrt(variance + cfg.rms_norm_eps) * final_norm
 
         lm_head = await streamer.fetch_tensor("lm_head.weight")
-        logits = F.linear(final_normed[:, -1, :], lm_head)
+        logits = F.linear(final_normed[:, -1, :], lm_head)[0]
 
-        next_token_id = int(torch.argmax(logits[0]))
+        topk = torch.topk(logits, k=5)
+        print("\nTop 5 Candidates for Next Token:")
+        for rank, (score, token_id) in enumerate(zip(topk.values.tolist(), topk.indices.tolist()), start=1):
+            tok_text = tokenizer.decode([token_id])
+            print(f"  #{rank}: Token ID {token_id:6d} ({tok_text!r}) with logit {score:.4f}")
+
+        next_token_id = int(torch.argmax(logits))
         next_token_str = tokenizer.decode([next_token_id])
         total_time = time.perf_counter() - t_start
 

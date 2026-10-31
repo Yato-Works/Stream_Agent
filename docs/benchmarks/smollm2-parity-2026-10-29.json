@@ -1,0 +1,23 @@
+{
+  "repo": "HuggingFaceTB/SmolLM2-135M-Instruct",
+  "revision": "12fd25f77366fa6b3b4b768ec3050bf629380bac",
+  "device": "cpu",
+  "prompt": "Hello, my name is",
+  "max_tokens": 8,
+  "reference_text": " Emily, and I'm a senior at",
+  "stream_agent_text": " Emily, and I'm a senior at",
+  "reference_tokens": 8,
+  "stream_agent_tokens": 8,
+  "text_match": true,
+  "stream_agent": {
+    "revision": "12fd25f77366fa6b3b4b768ec3050bf629380bac",
+    "artifact_bytes": 269060552,
+    "cache_used_bytes": 126454216,
+    "cache_limit_bytes": 134217728,
+    "downloaded_bytes": 298228493,
+    "range_requests": 47,
+    "full_object_requests": 0
+  },
+  "ok": true,
+  "elapsed_unix_seconds": 1793260837.687
+}

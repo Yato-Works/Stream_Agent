@@ -1,0 +1,188 @@
+{
+  "repo": "HuggingFaceTB/SmolLM2-135M-Instruct",
+  "revision": "12fd25f77366fa6b3b4b768ec3050bf629380bac",
+  "device": "cpu",
+  "materialize": "lazy",
+  "prompt": "Hello, my name is",
+  "max_tokens": 2,
+  "reference_text": " Emily,",
+  "stream_agent_text": " Emily,",
+  "reference_tokens": 2,
+  "stream_agent_tokens": 2,
+  "text_match": true,
+  "stream_agent": {
+    "materialize": "lazy",
+    "runtime_start_seconds": 0.019,
+    "load_seconds": 13.97,
+    "generation_seconds": 116.159,
+    "generation_weight_wait_ms": 115383.366,
+    "materialized_weight_bytes": 481435776,
+    "layer_profile": {
+      "model.layers.0": {
+        "calls": 2,
+        "materialize_ms": 6292.194300003757,
+        "materialized_bytes": 14160384
+      },
+      "model.layers.1": {
+        "calls": 2,
+        "materialize_ms": 4008.4772999980487,
+        "materialized_bytes": 14160384
+      },
+      "model.layers.2": {
+        "calls": 2,
+        "materialize_ms": 4040.3914999988046,
+        "materialized_bytes": 14160384
+      },
+      "model.layers.3": {
+        "calls": 2,
+        "materialize_ms": 4123.481299997366,
+        "materialized_bytes": 14160384
+      },
+      "model.layers.4": {
+        "calls": 2,
+        "materialize_ms": 534.2321999960404,
+        "materialized_bytes": 14160384
+      },
+      "model.layers.5": {
+        "calls": 2,
+        "materialize_ms": 3952.973200000997,
+        "materialized_bytes": 14160384
+      },
+      "model.layers.6": {
+        "calls": 2,
+        "materialize_ms": 4103.29360000469,
+        "materialized_bytes": 14160384
+      },
+      "model.layers.7": {
+        "calls": 2,
+        "materialize_ms": 3903.6311999989266,
+        "materialized_bytes": 14160384
+      },
+      "model.layers.8": {
+        "calls": 2,
+        "materialize_ms": 4050.7915999987745,
+        "materialized_bytes": 14160384
+      },
+      "model.layers.9": {
+        "calls": 2,
+        "materialize_ms": 1440.3331000030448,
+        "materialized_bytes": 14160384
+      },
+      "model.layers.10": {
+        "calls": 2,
+        "materialize_ms": 3941.9395000004442,
+        "materialized_bytes": 14160384
+      },
+      "model.layers.11": {
+        "calls": 2,
+        "materialize_ms": 4642.3944999987725,
+        "materialized_bytes": 14160384
+      },
+      "model.layers.12": {
+        "calls": 2,
+        "materialize_ms": 515.0733000009495,
+        "materialized_bytes": 14160384
+      },
+      "model.layers.13": {
+        "calls": 2,
+        "materialize_ms": 4374.812300000485,
+        "materialized_bytes": 14160384
+      },
+      "model.layers.14": {
+        "calls": 2,
+        "materialize_ms": 4488.888900003076,
+        "materialized_bytes": 14160384
+      },
+      "model.layers.15": {
+        "calls": 2,
+        "materialize_ms": 5326.84099999824,
+        "materialized_bytes": 14160384
+      },
+      "model.layers.16": {
+        "calls": 2,
+        "materialize_ms": 4395.436599999812,
+        "materialized_bytes": 14160384
+      },
+      "model.layers.17": {
+        "calls": 2,
+        "materialize_ms": 4152.236099998845,
+        "materialized_bytes": 14160384
+      },
+      "model.layers.18": {
+        "calls": 2,
+        "materialize_ms": 4131.1218999981065,
+        "materialized_bytes": 14160384
+      },
+      "model.layers.19": {
+        "calls": 2,
+        "materialize_ms": 514.7091000035289,
+        "materialized_bytes": 14160384
+      },
+      "model.layers.20": {
+        "calls": 2,
+        "materialize_ms": 8099.1429000023345,
+        "materialized_bytes": 14160384
+      },
+      "model.layers.21": {
+        "calls": 2,
+        "materialize_ms": 4697.493600000598,
+        "materialized_bytes": 14160384
+      },
+      "model.layers.22": {
+        "calls": 2,
+        "materialize_ms": 4333.0247000012605,
+        "materialized_bytes": 14160384
+      },
+      "model.layers.23": {
+        "calls": 2,
+        "materialize_ms": 4398.263799994311,
+        "materialized_bytes": 14160384
+      },
+      "model.layers.24": {
+        "calls": 2,
+        "materialize_ms": 530.4828999978781,
+        "materialized_bytes": 14160384
+      },
+      "model.layers.25": {
+        "calls": 2,
+        "materialize_ms": 4266.319199999998,
+        "materialized_bytes": 14160384
+      },
+      "model.layers.26": {
+        "calls": 2,
+        "materialize_ms": 4328.681899998628,
+        "materialized_bytes": 14160384
+      },
+      "model.layers.27": {
+        "calls": 2,
+        "materialize_ms": 4184.003599995776,
+        "materialized_bytes": 14160384
+      },
+      "model.layers.28": {
+        "calls": 2,
+        "materialize_ms": 4084.4633000015165,
+        "materialized_bytes": 14160384
+      },
+      "model.layers.29": {
+        "calls": 2,
+        "materialize_ms": 4100.704100001167,
+        "materialized_bytes": 14160384
+      }
+    },
+    "revision": "12fd25f77366fa6b3b4b768ec3050bf629380bac",
+    "artifact_bytes": 269060552,
+    "cache_used_bytes": 134217728,
+    "cache_limit_bytes": 134217728,
+    "peak_rss_bytes": 1415110656,
+    "peak_vram_bytes": null,
+    "downloaded_bytes": 504566672,
+    "range_requests": 65,
+    "full_object_requests": 0,
+    "cache_hits": 538,
+    "cache_misses": 62,
+    "cache_evictions": 62,
+    "refetched_bytes": 369723848
+  },
+  "ok": true,
+  "elapsed_unix_seconds": 1793266449.1
+}
