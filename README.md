@@ -15,8 +15,15 @@
   Expanding the cache from 128 MiB (constrained) to 512 MiB (adequate) reduced 2-token generation time from **120.58s to 68.36s (43.3% faster)** and completely eliminated **243.9 MB of redundant re-downloads (0 evictions, 0 refetched bytes)**. *(This demonstrates cache-tradeoff scaling rather than interactive generation speeds).*
 - **Prefetch Overlap (SmolLM2-135M, CPU)**:
   Background layer prefetching (`--prefetch-layers`) overlapped weight retrieval during decoder passes, reducing single-token generation wall time from **71.57s to 60.98s** on cold runs while strictly respecting the 128 MiB cache limit.
+- **Sparse MoE Token Parity (Qwen1.5-MoE-A2.7B-Chat, 24 layers)**:
+  All 24 decoder layers ran via selective MoE streaming; greedy next token for
+  `'Hello, my name is'` is **" John"** (Token ID 3757), matching official Transformers.
+  Cold-cache run: **231 MB transferred in 83.76 s** (residential Wi-Fi, RTX 3050);
+  cache hits 1,465 / 1,507 (97.2%). Required applying `create_causal_mask` and
+  routing through post-attention layer norm (`normed_for_moe`). *(Single greedy
+  step; sustained multi-token parity is not yet measured.)*
 
-> **Hardware Context & Current Scope**: Verified on Windows 10, Intel CPU (16 cores), 16 GiB RAM, RTX 3050 (8 GiB VRAM). Memory bounds (RAM/VRAM) depend on the inference backend; Stream Agent strictly bounds the *disk weight footprint*. End-to-end token generation is currently verified on dense models (SmolLM2); full sparse MoE generation is the immediate next milestone.
+> **Hardware Context & Current Scope**: Verified on Windows 10, Intel CPU (16 cores), 16 GiB RAM, RTX 3050 (8 GiB VRAM). Memory bounds (RAM/VRAM) depend on the inference backend; Stream Agent strictly bounds the *disk weight footprint*. Dense-model parity (SmolLM2) and single-step sparse MoE parity (Qwen1.5-MoE-A2.7B-Chat, 24 layers) are both verified; sustained multi-token MoE generation is the next milestone.
 
 ---
 
@@ -42,10 +49,12 @@ The following is implemented and covered by the test-suite:
 
 Not implemented (and therefore not claimed):
 
-- MoE expert-level streaming for a real MoE model — the backend interface
-  supports declared expert packing, but no MoE model has been validated yet.
-  The selective-MoE prototype is opt-in and can be wrong if its router
-  resolver does not exactly reproduce the model's top-k selection.
+- MoE expert-level streaming beyond the verified case — `Qwen/Qwen1.5-MoE-A2.7B-Chat` (24 layers, 60 experts) is verified for one
+  greedy step (next token " John" matches official Transformers). Sustained
+  multi-token parity and other MoE model families are not yet measured.
+  Correctness required `create_causal_mask` and post-attention layer norm
+  routing (`normed_for_moe`); the prototype may produce incorrect output for
+  other architectures.
 - GGUF **tensor-level** streaming — `GgufBackend` fetches the complete
   `.gguf` file through the bounded weight cache and then lets Transformers
   load it. The per-tensor byte-range table is parsed and validated, but no
